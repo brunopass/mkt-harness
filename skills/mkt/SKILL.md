@@ -17,9 +17,10 @@ on it. Rules: [AGENTS.md](../../AGENTS.md). Everything here is read-only until t
 - `brand_get {brand}` → config, accounts, personas.
 - Foundation: read `brand.md`, `voice.md`, `offers.md`, `personas/*.md`. A file still containing the template's
   `<!-- ... -->` placeholders counts as **not filled**. Count the lines under `## Open questions` in `brand.md`.
-- Research: list `workspace/brands/<brand>/research/` (site scans: the brand's own host and competitors). Look at the
-  newest `workspace/runs/*-research-<brand>.json`: finished (has `output`) or none. A `workspace/logs/research-<brand>-*.log`
-  newer than any run file means a background research run may still be going.
+- Research (file tools only: Glob and Read, never the shell): Glob `workspace/brands/<brand>/research/*.md` (site
+  scans: the brand's own host and competitors). Glob `workspace/runs/*-research-<brand>.json` and read the newest:
+  finished if it has `output`. A `workspace/logs/research-<brand>-*.log` newer than any run file means a background
+  research run may still be going.
 - Queue: `outbox_list {brand, status: ["pending_approval"]}`, and `["failed","blocked"]`.
 - Conversations: `conversation_list {brand, needsReply: true}`.
 - Leads: `lead_list {brand, dueBefore: <now ISO>}` and the total count by stage (`lead_list {brand}`).
