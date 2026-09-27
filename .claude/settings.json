@@ -63,7 +63,8 @@
       "Bash(./bin/mkt content list:*)",
       "Bash(npm run typecheck:*)",
       "Bash(npm test:*)",
-      "mcp__mkt__report_open"
+      "mcp__mkt__report_open",
+      "mcp__mkt__browser_done"
     ],
     "deny": [
       "mcp__mkt__outbox_approve",

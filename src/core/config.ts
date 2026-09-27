@@ -58,12 +58,15 @@ export const Config = z.object({
     .object({
       executablePath: z.string().nullable().default(null),
       headless: z.boolean().default(false),
+      /** unused: Chrome now picks a free debugging port per profile (kept so older configs still load) */
       basePort: z.number().int().default(9320),
       windowSize: z.string().default("1280,900"),
       /** extra wait after navigation, ms: gives heavy SPAs time to settle */
       settleMs: z.number().int().default(1200),
+      /** tabs the harness opened close after this many idle minutes (and always when the agent session ends) */
+      idleTabMin: z.number().positive().default(10),
     })
-    .default({ executablePath: null, headless: false, basePort: 9320, windowSize: "1280,900", settleMs: 1200 }),
+    .default({ executablePath: null, headless: false, basePort: 9320, windowSize: "1280,900", settleMs: 1200, idleTabMin: 10 }),
   inbox: z.object({ syncEveryMin: z.number().int().default(15) }).default({ syncEveryMin: 15 }),
   runner: z
     .object({

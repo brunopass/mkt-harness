@@ -412,10 +412,11 @@ program
   .description("send one approved item, or --due for everything due; --dry-run prepares without sending")
   .option("--due")
   .option("--dry-run")
+  .option("--keep-open", "with --dry-run: leave the filled composer open to look at (default: close the tab, keep the screenshot)")
   .action(async (id, o) => {
     const x = ctx();
     try {
-      if (id) printDispatch(await dispatchOne(x, id, { dryRun: !!o.dryRun }));
+      if (id) printDispatch(await dispatchOne(x, id, { dryRun: !!o.dryRun, keepOpen: !!o.keepOpen }));
       else if (o.due) (await dispatchDue(x)).forEach(printDispatch);
       else throw new MktError("pass an id or --due");
     } finally {

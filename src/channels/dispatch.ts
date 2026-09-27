@@ -31,7 +31,7 @@ function mediaFor(ctx: Ctx, item: OutboxItem): string[] {
   return resolveMedia(ctx, item.brand, media);
 }
 
-export async function sendVia(ctx: Ctx, account: Account & { brand: string }, item: OutboxItem, dryRun: boolean): Promise<SendResult> {
+export async function sendVia(ctx: Ctx, account: Account & { brand: string }, item: OutboxItem, dryRun: boolean, keepOpen = false): Promise<SendResult> {
   const media = mediaFor(ctx, item);
   if (account.transport === "smtp") return sendSmtp(ctx, account, item, { dryRun, media });
   if (account.transport === "whatsapp_cloud") return sendWhatsappCloud(account, item, { dryRun });
@@ -44,7 +44,7 @@ export async function sendVia(ctx: Ctx, account: Account & { brand: string }, it
     return p;
   };
   const env: AdapterEnv = { ctx, account, page, dryRun, shot, log: (m) => audit(ctx, "adapter.log", { brand: item.brand, ref: item.id, detail: { m } }), goto: (u) => goto(ctx, page, u) };
-  let keepOpen = false;
+  let keep = false;
   try {
     await env.goto(adapter.homeUrl);
     if (!(await adapter.isLoggedIn(env))) throw new AdapterError("login", `${account.id} is not logged in: run  mkt browser open ${account.id}  and log in`);
@@ -73,19 +73,19 @@ export async function sendVia(ctx: Ctx, account: Account & { brand: string }, it
         r = adapter.email ? await adapter.email(env, { to, subject: item.subject ?? "", text: composeEmailText(ctx, item) }) : unsupported();
         break;
     }
-    // dry runs leave the filled composer open in a visible window so a human can look at it
-    keepOpen = dryRun && !ctx.config.browser.headless;
+    // a dry run can leave the filled composer open for a human to look at, when asked; otherwise the screenshot is enough
+    keep = dryRun && keepOpen && !ctx.config.browser.headless;
     return r!;
   } catch (e: any) {
     const screenshot = e instanceof AdapterError && e.screenshot ? e.screenshot : await shot("error");
     const err = new AdapterError(e instanceof AdapterError ? e.step : "send", e instanceof AdapterError ? e.message.replace(/^[^:]+: /, "") : e.message, screenshot);
     throw err;
   } finally {
-    if (!keepOpen) await page.close().catch(() => {});
+    if (!keep) await page.close().catch(() => {});
   }
 }
 
-export async function dispatchOne(ctx: Ctx, id: string, opts: { dryRun?: boolean; now?: Date } = {}): Promise<DispatchResult> {
+export async function dispatchOne(ctx: Ctx, id: string, opts: { dryRun?: boolean; keepOpen?: boolean; now?: Date } = {}): Promise<DispatchResult> {
   const dryRun = !!opts.dryRun;
   const b = beginSend(ctx, id, { dryRun, now: opts.now });
   if (!b.ok) {
@@ -95,7 +95,7 @@ export async function dispatchOne(ctx: Ctx, id: string, opts: { dryRun?: boolean
   }
   const account = getAccount(ctx, b.item.account);
   try {
-    const r = await sendVia(ctx, account, b.item, dryRun);
+    const r = await sendVia(ctx, account, b.item, dryRun, !!opts.keepOpen);
     if (dryRun) {
       recordDryRun(ctx, id, { screenshot: r.screenshot, note: r.note });
       return { id, status: "dry_run", note: r.note, screenshot: r.screenshot };

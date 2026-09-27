@@ -30,7 +30,6 @@ outreach:
 browser:
   executablePath: null         # default: installed Google Chrome
   headless: false              # visible windows; you can watch every action
-  basePort: 9320
   settleMs: 1200
 
 inbox:

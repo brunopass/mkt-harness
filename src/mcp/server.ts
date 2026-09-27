@@ -4,7 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { adapterFor, type AdapterEnv } from "../browser/adapters/index.js";
-import { closeChrome, getPage, goto, RESEARCH_PROFILE, setActivePage, shotPath } from "../browser/chrome.js";
+import { closeAllOwnedTabs, closeChrome, closeOwnedTabs, getPage, goto, RESEARCH_PROFILE, setActivePage, shotPath } from "../browser/chrome.js";
 import { locatorFor, snapshot, typeInto, visibleText } from "../browser/snapshot.js";
 import { dispatchDue, dispatchOne } from "../channels/dispatch.js";
 import { brandContext, brandDoc, getAccount, getBrand, listAccounts, listBrands, listPersonas } from "../core/brands.js";
@@ -300,9 +300,14 @@ export function createServer(ctx: Ctx): McpServer {
     tool(
       "outbox_dispatch",
       "Send approved items now through their channel (policy checks apply: suppression, consent, quiet hours, rate limits). dryRun fills the composer / verifies SMTP and screenshots without sending; it works on pending items too.",
-      { id: z.string().optional(), due: z.boolean().optional().describe("send everything approved and due"), dryRun: z.boolean().optional() },
-      async ({ id, due, dryRun }) => {
-        if (id) return dispatchOne(ctx, id, { dryRun });
+      {
+        id: z.string().optional(),
+        due: z.boolean().optional().describe("send everything approved and due"),
+        dryRun: z.boolean().optional(),
+        keepOpen: z.boolean().optional().describe("dry run only: leave the filled composer open for the human to look at (default: close it, keep the screenshot)"),
+      },
+      async ({ id, due, dryRun, keepOpen }) => {
+        if (id) return dispatchOne(ctx, id, { dryRun, keepOpen });
         if (due) return dispatchDue(ctx);
         throw new MktError("pass id or due: true");
       },
@@ -522,7 +527,17 @@ export function createServer(ctx: Ctx): McpServer {
     return Promise.all(pages.map(async (p, i) => ({ index: i, url: p.url(), title: await p.title().catch(() => ""), active: p === page })));
   });
 
-  tool("browser_close", "Close the account's Chrome window (the login stays in its profile).", { account: acct }, async ({ account }) => ({ closed: await closeChrome(ctx, account) }));
+  tool(
+    "browser_done",
+    "Finished with the browser: close the tabs the harness opened (for one account, or all), and Chrome itself when nothing else is open. The human's own tabs are never touched. Call this at the end of every browser task.",
+    { account: acct.optional().describe("omit to clean up every account") },
+    async ({ account }) => {
+      if (account) return closeOwnedTabs(ctx, account, { closeChromeIfEmpty: true });
+      return { closed: await closeAllOwnedTabs(ctx, { closeChromeIfEmpty: true }) };
+    },
+  );
+
+  tool("browser_close", "Close the account's whole Chrome window, including tabs the human opened (the login stays in its profile). Prefer browser_done.", { account: acct }, async ({ account }) => ({ closed: await closeChrome(ctx, account) }));
 
   tool("browser_login_status", "Check whether an account's browser profile is logged in to its platform (opens a temporary tab).", { account: acct }, async ({ account }) => {
     const a = getAccount(ctx, account);
@@ -599,5 +614,20 @@ export function createServer(ctx: Ctx): McpServer {
 
 export async function startMcp(ctx: Ctx): Promise<void> {
   const server = createServer({ ...ctx, actor: process.env.MKT_ACTOR ?? (process.env.MKT_MCP_PROFILE === "headless" ? "agent:headless" : "agent:mcp") });
+  // browser hygiene: tabs the harness opened close after sitting idle, and all of them when the session ends
+  const idleMs = ctx.config.browser.idleTabMin * 60_000;
+  const sweep = setInterval(() => void closeAllOwnedTabs(ctx, { idleMs, closeChromeIfEmpty: true }).catch(() => {}), Math.min(idleMs, 60_000));
+  sweep.unref();
+  let ending = false;
+  const end = async () => {
+    if (ending) return;
+    ending = true;
+    clearInterval(sweep);
+    await Promise.race([closeAllOwnedTabs(ctx, { closeChromeIfEmpty: true }).catch(() => 0), new Promise((r) => setTimeout(r, 5_000))]);
+    process.exit(0);
+  };
+  process.stdin.on("end", end); // the client (Claude Code / Codex) went away
+  process.on("SIGTERM", end);
+  process.on("SIGINT", end);
   await server.connect(new StdioServerTransport());
 }

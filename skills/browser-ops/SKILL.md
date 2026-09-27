@@ -43,6 +43,13 @@ the page needs that brand's own login (its insights, its inbox). Open, scroll, r
 walls that subscribe to things while researching. Keep sessions short on LinkedIn/Instagram (profile-view limits);
 prefer public pages or WebFetch when no login is needed.
 
+## Clean up (every time)
+- Work in the harness's own tab: `browser_open` opens one; switching to the human's tabs (`browser_tabs {select}`) is
+  for reading what they asked you to look at, never for acting.
+- Done with the task (or stopping on a stop condition) → `browser_done {account}`. It closes only harness tabs, and
+  Chrome if nothing else is open. In Claude in Chrome, close every tab you opened with `tabs_close_mcp`.
+- Dry runs close their tab and keep the screenshot; pass `keepOpen: true` only when the human wants to look live.
+
 ## Manual send protocol (claim → do → verify → complete)
 Only for an **approved** outbox item that the adapter can't handle (`unsupported`) or failed on (UI changed).
 1. `outbox_claim {id}` → runs policy checks, locks the item, returns `token`, the item and the playbook path.

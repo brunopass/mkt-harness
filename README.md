@@ -5,7 +5,7 @@
 <p align="center">
   <a href="#quick-start"><img alt="Node 22.12+" src="https://img.shields.io/badge/node-22.12%2B-16161A?logo=nodedotjs&logoColor=white"></a>
   <a href="src/"><img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-16161A?logo=typescript&logoColor=white"></a>
-  <a href="src/mcp/server.ts"><img alt="50 MCP tools" src="https://img.shields.io/badge/MCP-50%20tools-E6007E"></a>
+  <a href="src/mcp/server.ts"><img alt="51 MCP tools" src="https://img.shields.io/badge/MCP-51%20tools-E6007E"></a>
   <a href="#skills"><img alt="17 skills" src="https://img.shields.io/badge/skills-17-E6007E"></a>
   <a href="#quick-start"><img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-ready-16161A?logo=claude&logoColor=white"></a>
   <a href="#quick-start"><img alt="Codex" src="https://img.shields.io/badge/Codex-ready-16161A"></a>
@@ -271,6 +271,8 @@ Each account gets its own Chrome profile in `workspace/.profiles/<account>` with
 > [!IMPORTANT]
 > Platforms change their pages constantly. Run `mkt send <id> --dry-run` once per account before trusting an adapter: it fills the composer, takes a screenshot and stops before sending. When an adapter breaks, the agent can finish the item by hand under `outbox_claim` / `outbox_complete`, following the platform's [playbook](skills/browser-ops/references/platforms/).
 
+No tab is left behind: agents work in a tab the harness opens (never one you have open) and finish with `browser_done`, which closes the harness's tabs and Chrome itself when nothing else is open. Tabs the harness opened also close after 10 idle minutes (`browser.idleTabMin`) and when the agent session ends; dry runs keep the screenshot and close the tab (`--keep-open` to look at it live).
+
 ## Automation
 
 Routines in `mkt.config.yaml` (created from [`templates/mkt.config.yaml`](templates/mkt.config.yaml)) are cron jobs for the agent. They run headless with a restricted tool profile: research, write files, update records, draft to the outbox. They cannot send, claim or type into a browser unless you allow clicks for that routine.
@@ -295,7 +297,7 @@ mkt daemon install --load                    # macOS launchd: sends due items, s
 ```
 
 <details>
-<summary><b>Tools the agent can use</b> (50, MCP server <code>mkt</code>)</summary>
+<summary><b>Tools the agent can use</b> (51, MCP server <code>mkt</code>)</summary>
 
 | Area | Tools |
 |---|---|
@@ -308,7 +310,7 @@ mkt daemon install --load                    # macOS launchd: sends due items, s
 | Show results | `report_open` (a Markdown deliverable as a styled local page, opened in the browser) |
 | Insights & trends | `insight_add` `insight_list` `trend_observe` `trend_momentum` `trend_fetch_feed` |
 | Safety | `suppress` `suppression_check` `policy_status` |
-| Browser | `browser_open` `browser_navigate` `browser_snapshot` `browser_text` `browser_screenshot` `browser_scroll` `browser_tabs` `browser_close` `browser_login_status` `browser_click` `browser_type` `browser_press` `browser_upload` |
+| Browser | `browser_open` `browser_navigate` `browser_snapshot` `browser_text` `browser_screenshot` `browser_scroll` `browser_tabs` `browser_done` `browser_close` `browser_login_status` `browser_click` `browser_type` `browser_press` `browser_upload` |
 
 `browser_snapshot` returns every interactive element as `[e12] button "Publicar"`, and the agent acts on those refs. In headless routines, sending and browser input tools are not registered at all.
 
@@ -352,7 +354,7 @@ skills/              17 shared skills + references (hooks, formats, outreach tem
 .claude/agents/      7 subagents          .claude/settings.json   permissions (agents can't approve)
 src/
   core/              schemas, store (lock + atomic writes), policy, outbox, leads, content, conversations, trends, cron
-  mcp/server.ts      the 50 tools
+  mcp/server.ts      the 51 tools
   report/            Markdown deliverables -> safe, brand-styled local pages
   research/          site scanner (headless Chrome) used by setup, site_scan and mkt brand scan
   browser/           Chrome per account over CDP, snapshot refs, 9 platform adapters
@@ -397,7 +399,7 @@ What the tests cover, including the adversarial cases:
 | Site scanner | identity, languages, socials across pages, contacts, colours and fonts | spoofed social links (`instagram.com.evil.com`, `javascript:`), prompt injection that tries to break out of the snapshot's quoting, 3 000-deep and 20 000-item JSON-LD, hanging and failing pages, redirects off-site, `localhost` / private / cloud-metadata addresses, YAML-shaped values, control and bidi characters |
 | Setup TUI | the whole first run with scripted answers, the menu, pre-fill from a domain, background research | invalid answers, SMTP failures, a site that can't be read, `.env` values with `$( )`, mixed quotes and line breaks (checked with Node's own loader) |
 | Agent hand-off | `mkt open` through the real shell script; desktop apps via `claude://code/new` and `codex://new` links, remembered choice | arguments with `$( )`, backticks, `;`, `*`, `-rf`: passed literally, nothing executed, no Node parent left behind; a message or folder containing `&folder=`, `&q=`, `#`, spaces or accents can't add or change link parameters; the terminal gets the real tty device |
-| Browser | snapshot refs, dry run vs real send against a fake social site, adapter failure screenshots, renderer | |
+| Browser | snapshot refs, dry run vs real send against a fake social site, adapter failure screenshots, renderer; tab hygiene: blank start tab reused, `browser_done` closes Chrome when nothing is left, idle sweep, dry runs close their tab, an MCP session closes its tabs when the agent goes away | a human's tab in the same Chrome is never taken over or closed |
 | Autopilot | drafts approved as autopilot, kinds respected, re-approval after edits, switching on and off (pending items, config, local Claude permissions) | held items can't be released by an agent (or sent if forged), suppression after approval, opt-out replies cancel what autopilot queued, consent, quiet hours, touch and rate limits, replies to people who never wrote |
 | Reports | Markdown to a brand-styled page next to the file, frontmatter stripped, tables, images, diagrams drawn (real Chrome) | `<script>`, `onerror`, `<iframe>`, `javascript:` (any case, with tabs), `data:`, `vbscript:`, `file:` and protocol-relative links, diagram labels with HTML, symlinks and paths out of the workspace; the page is opened in Chrome and nothing runs |
 | Skills | frontmatter, only real tool names, links resolve | no subagent can approve or run shell commands |

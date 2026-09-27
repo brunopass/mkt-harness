@@ -125,6 +125,12 @@ upload/screenshot/text/tabs/close/login_status`. Act on `[ref]`s from the latest
 changes. Deterministic adapters (`src/browser/adapters/`) handle posting, DMs and inbox reading; when one fails,
 follow `skills/browser-ops/references/platforms/<platform>.md` by hand under a claim.
 
+**Leave no tabs behind.** The browser tools work in a tab the harness opens for you, never in one the human has open.
+When a browser task is done, call `browser_done` (one account, or none for all): it closes the harness's tabs and
+Chrome itself when nothing else is open. Never close tabs the human opened. Leftovers are closed anyway after
+`browser.idleTabMin` idle minutes and when your session ends, but don't rely on that. In Claude Code, tabs you open with
+Claude in Chrome are yours too: close each one (`tabs_close_mcp`) as soon as you're done with it.
+
 ## Working on the harness itself
 
 - TypeScript on Node ≥ 22.12, run with tsx (no build step). `npm run typecheck`, `npm test`
