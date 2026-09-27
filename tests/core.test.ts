@@ -326,3 +326,40 @@ describe("email parsing", () => {
     expect(parseImapUrl("imaps://me%40x.com:p%40ss@imap.x.com")).toEqual({ host: "imap.x.com", port: 993, secure: true, user: "me@x.com", pass: "p@ss" });
   });
 });
+
+describe("background jobs don't open Chrome needlessly", () => {
+  it("inbox sync skips the example brand and accounts found logged out recently; retries after a day", async () => {
+    const { markLoggedOut, recentlyLoggedOut, markLoggedIn } = await import("../src/browser/chrome.js");
+    const { syncAll } = await import("../src/inbox/sync.js");
+    const ctx = makeWs();
+    // an old install whose example accounts were still active with inbox on
+    fs.mkdirSync(path.join(ctx.ws, "brands", "example"), { recursive: true });
+    fs.writeFileSync(path.join(ctx.ws, "brands", "example", "brand.yaml"), "name: Example\n");
+    fs.writeFileSync(path.join(ctx.ws, "brands", "example", "accounts.yaml"), "accounts:\n  - { id: example-wa, platform: whatsapp, handle: '+34600000000', inbox: true }\n");
+    markLoggedOut(ctx, "acme-wa", "test");
+    const r = await syncAll(ctx);
+    expect(r.map((x) => x.account)).toEqual(["acme-wa"]); // example-wa not even attempted
+    expect(r[0].skipped).toMatch(/logged out since/);
+    const now = Date.now();
+    expect(recentlyLoggedOut(ctx, "acme-wa", 24, now)).toBeTruthy();
+    expect(recentlyLoggedOut(ctx, "acme-wa", 24, now + 25 * 3_600_000)).toBeUndefined(); // a day later it tries again
+    markLoggedIn(ctx, "acme-wa");
+    expect(recentlyLoggedOut(ctx, "acme-wa")).toBeUndefined();
+  });
+
+  it("the send queue ignores the example brand", async () => {
+    const { dispatchDue } = await import("../src/channels/dispatch.js");
+    const ctx = makeWs({ mode: "autopilot" });
+    fs.mkdirSync(path.join(ctx.ws, "brands", "example"), { recursive: true });
+    fs.writeFileSync(path.join(ctx.ws, "brands", "example", "brand.yaml"), "name: Example\n");
+    fs.writeFileSync(path.join(ctx.ws, "brands", "example", "accounts.yaml"), "accounts:\n  - { id: example-x, platform: x, handle: ex }\n");
+    const it1 = draftOutbox(ctx, { brand: "example", kind: "post", account: "example-x", body: "demo" });
+    expect(it1.status).toBe("approved");
+    expect(await dispatchDue(ctx)).toEqual([]);
+  });
+
+  it("the shipped example accounts are inactive", () => {
+    const text = fs.readFileSync(path.join(import.meta.dirname, "..", "workspace", "brands", "example", "accounts.yaml"), "utf8");
+    expect(text).not.toMatch(/active: true/);
+  });
+});

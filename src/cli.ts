@@ -5,7 +5,7 @@ import path from "node:path";
 import readline from "node:readline/promises";
 import { Command } from "commander";
 import { adapterFor } from "./browser/adapters/index.js";
-import { chromePath, chromeStatus, closeChrome, detachAll, ensureChrome, getPage, goto, RESEARCH_PROFILE } from "./browser/chrome.js";
+import { chromePath, chromeStatus, closeChrome, detachAll, ensureChrome, getPage, goto, loggedOutAccounts, RESEARCH_PROFILE } from "./browser/chrome.js";
 import { dispatchDue, dispatchOne, type DispatchResult } from "./channels/dispatch.js";
 import { addAccount, createBrand, getAccount, getBrand, listAccounts, listBrands, listPersonas } from "./core/brands.js";
 import { loadCtx, ROOT, type Ctx } from "./core/config.js";
@@ -163,7 +163,10 @@ program
           else if (a.transport === "whatsapp_cloud") check(!!(a.whatsappCloud && process.env[a.whatsappCloud.tokenEnv]), `    ${a.id} whatsapp cloud`);
           else {
             const st = await chromeStatus(x, a.id);
-            check(true, `    ${a.id} browser`, st.alive ? `running on :${st.port}` : fs.existsSync(st.profile) ? "profile exists (check login: mkt browser check)" : `no profile yet: mkt browser open ${a.id}`);
+            const lo = loggedOutAccounts(x)[a.id];
+            if (!a.active) check(true, `    ${a.id} browser`, "inactive");
+            else if (lo) check(false, `    ${a.id} browser`, `logged out (seen ${lo.at}): mkt browser open ${a.id}, then mkt browser check`);
+            else check(true, `    ${a.id} browser`, st.alive ? `running on :${st.port}` : fs.existsSync(st.profile) ? "profile exists (check login: mkt browser check)" : `no profile yet: mkt browser open ${a.id}`);
           }
         }
       } catch (e: any) {

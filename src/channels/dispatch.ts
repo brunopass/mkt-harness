@@ -1,6 +1,7 @@
 import { adapterFor, AdapterError, type AdapterEnv, type SendResult } from "../browser/adapters/index.js";
 import { resolveMedia } from "../browser/adapters/helpers.js";
-import { getPage, goto, shotPath } from "../browser/chrome.js";
+import type { Page } from "playwright-core";
+import { goto, markLoggedIn, markLoggedOut, shotPath, withJobPage } from "../browser/chrome.js";
 import { getAccount } from "../core/brands.js";
 import type { Ctx } from "../core/config.js";
 import { getContent, updateContent } from "../core/content.js";
@@ -37,17 +38,30 @@ export async function sendVia(ctx: Ctx, account: Account & { brand: string }, it
   if (account.transport === "whatsapp_cloud") return sendWhatsappCloud(account, item, { dryRun });
 
   const adapter = adapterFor(account.platform);
-  const page = await getPage(ctx, account.id, { newTab: true });
+  let keep = false;
+  return withJobPage(ctx, account.id, (page) => runAdapter(ctx, account, item, adapter, page, dryRun, media, () => {
+    // a dry run can leave the filled composer open for a human to look at, when asked; otherwise the screenshot is enough
+    keep = dryRun && keepOpen && !ctx.config.browser.headless;
+  }), () => keep);
+}
+
+async function runAdapter(
+  ctx: Ctx, account: Account & { brand: string }, item: OutboxItem, adapter: ReturnType<typeof adapterFor>, page: Page,
+  dryRun: boolean, media: string[], onDone: () => void,
+): Promise<SendResult> {
   const shot = async (label: string) => {
     const p = shotPath(ctx, account.id, `${item.id}-${label}`);
     await page.screenshot({ path: p }).catch(() => {});
     return p;
   };
   const env: AdapterEnv = { ctx, account, page, dryRun, shot, log: (m) => audit(ctx, "adapter.log", { brand: item.brand, ref: item.id, detail: { m } }), goto: (u) => goto(ctx, page, u) };
-  let keep = false;
   try {
     await env.goto(adapter.homeUrl);
-    if (!(await adapter.isLoggedIn(env))) throw new AdapterError("login", `${account.id} is not logged in: run  mkt browser open ${account.id}  and log in`);
+    if (!(await adapter.isLoggedIn(env))) {
+      markLoggedOut(ctx, account.id, `send ${item.id}`);
+      throw new AdapterError("login", `${account.id} is not logged in: run  mkt browser open ${account.id}  and log in`);
+    }
+    markLoggedIn(ctx, account.id);
     const to = item.to ?? {};
     const unsupported = () => {
       throw new AdapterError("unsupported", `the ${account.platform} adapter cannot do "${item.kind}" yet: do it by hand (outbox_claim + browser tools, playbook skills/browser-ops/references/platforms/${account.platform}.md)`);
@@ -73,15 +87,12 @@ export async function sendVia(ctx: Ctx, account: Account & { brand: string }, it
         r = adapter.email ? await adapter.email(env, { to, subject: item.subject ?? "", text: composeEmailText(ctx, item) }) : unsupported();
         break;
     }
-    // a dry run can leave the filled composer open for a human to look at, when asked; otherwise the screenshot is enough
-    keep = dryRun && keepOpen && !ctx.config.browser.headless;
+    onDone();
     return r!;
   } catch (e: any) {
     const screenshot = e instanceof AdapterError && e.screenshot ? e.screenshot : await shot("error");
     const err = new AdapterError(e instanceof AdapterError ? e.step : "send", e instanceof AdapterError ? e.message.replace(/^[^:]+: /, "") : e.message, screenshot);
     throw err;
-  } finally {
-    if (!keep) await page.close().catch(() => {});
   }
 }
 
@@ -126,7 +137,8 @@ function markPublished(ctx: Ctx, it: OutboxItem): void {
 export async function dispatchDue(ctx: Ctx, opts: { now?: Date; limit?: number } = {}): Promise<DispatchResult[]> {
   const now = opts.now ?? new Date();
   recoverStuck(ctx, 20, now);
-  const due = dueOutbox(ctx, now).slice(0, opts.limit ?? 50);
+  // the shipped example brand is a demo: its accounts are never used
+  const due = dueOutbox(ctx, now).filter((i) => i.brand !== "example").slice(0, opts.limit ?? 50);
   const byAccount = new Map<string, OutboxItem[]>();
   for (const it of due) byAccount.set(it.account, [...(byAccount.get(it.account) ?? []), it]);
   const results: DispatchResult[] = [];

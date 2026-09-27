@@ -278,3 +278,53 @@ export function shotPath(ctx: Ctx, account: string, label: string): string {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   return path.join(dir, `${stamp}-${label.replace(/[^a-z0-9-]+/gi, "_").slice(0, 40)}.png`);
 }
+
+// ---------------------------------------------------------------- jobs (send, inbox sync, login checks)
+
+/**
+ * Run a job in a private harness tab of the account's Chrome. The tab closes afterwards, and if the job had to start
+ * Chrome, Chrome closes too: background work leaves nothing running or on screen. `keep()` can keep the tab (dry run
+ * the human wants to look at).
+ */
+export async function withJobPage<T>(ctx: Ctx, account: string, fn: (page: Page) => Promise<T>, keep: () => boolean = () => false): Promise<T> {
+  const wasRunning = !!(await runningPort(ctx, account));
+  const page = await getPage(ctx, account, { newTab: true });
+  try {
+    return await fn(page);
+  } finally {
+    if (!keep()) {
+      await page.close().catch(() => {});
+      if (!wasRunning) await closeChrome(ctx, account);
+    }
+  }
+}
+
+interface LoggedOut {
+  at: string;
+  reason: string;
+}
+const loginStateFile = (ctx: Ctx) => path.join(ctx.ws, "state", "logged-out.json");
+
+/** Accounts found logged out: background jobs skip them for a day instead of opening Chrome every few minutes. */
+export function loggedOutAccounts(ctx: Ctx): Record<string, LoggedOut> {
+  return readJson<Record<string, LoggedOut>>(loginStateFile(ctx), {});
+}
+
+export function markLoggedOut(ctx: Ctx, account: string, reason: string): void {
+  const all = loggedOutAccounts(ctx);
+  all[account] = { at: new Date().toISOString(), reason };
+  writeJson(loginStateFile(ctx), all);
+}
+
+export function markLoggedIn(ctx: Ctx, account: string): void {
+  const all = loggedOutAccounts(ctx);
+  if (!(account in all)) return;
+  delete all[account];
+  writeJson(loginStateFile(ctx), all);
+}
+
+/** Logged out less than `hours` ago: skip it in background jobs (a daily retry picks up a login done elsewhere). */
+export function recentlyLoggedOut(ctx: Ctx, account: string, hours = 24, now = Date.now()): LoggedOut | undefined {
+  const e = loggedOutAccounts(ctx)[account];
+  return e && now - Date.parse(e.at) < hours * 3_600_000 ? e : undefined;
+}

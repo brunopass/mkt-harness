@@ -8,7 +8,8 @@ import { chromium } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { dryRunStop, typeText } from "../src/browser/adapters/helpers.js";
 import { ADAPTERS, type PlatformAdapter } from "../src/browser/adapters/index.js";
-import { chromeStatus, closeChrome, closeOwnedTabs, detachAll, getPage, isAlive, ownedPages } from "../src/browser/chrome.js";
+import { chromeStatus, closeChrome, closeOwnedTabs, detachAll, getPage, isAlive, loggedOutAccounts, ownedPages, withJobPage } from "../src/browser/chrome.js";
+import { syncAccount, syncAll } from "../src/inbox/sync.js";
 import { dispatchOne } from "../src/channels/dispatch.js";
 import { draftOutbox } from "../src/core/outbox.js";
 import { makeWs, ROOT } from "./helpers.js";
@@ -116,6 +117,35 @@ run("browser tabs are cleaned up", () => {
     const kept = await dispatchOne({ ...ctx, config: { ...ctx.config, browser: { ...ctx.config.browser, headless: false } } }, d.id, { dryRun: true, keepOpen: true });
     expect(kept.status).toBe("dry_run");
     expect((await allTabs("acme-threads")).filter((u) => u === `${base}/home`)).toHaveLength(1);
+  }, 60_000);
+
+  it("a background job that had to start Chrome closes it; one that found it running closes only its tab", async () => {
+    await closeChrome(ctx, "acme-x");
+    await detachAll();
+    await withJobPage(ctx, "acme-x", async (page) => void (await page.goto(`${base}/job`)));
+    expect((await chromeStatus(ctx, "acme-x")).alive).toBe(false);
+
+    await getPage(ctx, "acme-x", { url: `${base}/agent-working` }); // Chrome already open with an agent tab
+    await withJobPage(ctx, "acme-x", async (page) => void (await page.goto(`${base}/job-2`)));
+    expect(await allTabs("acme-x")).toEqual([`${base}/agent-working`]);
+  });
+
+  it("inbox sync leaves no Chrome behind, records a logged-out account and then skips it", async () => {
+    await closeChrome(ctx, "acme-threads");
+    await detachAll();
+    fs.appendFileSync(`${ctx.ws}/brands/acme/accounts.yaml`, `  - { id: acme-threads-2, platform: threads, handle: acme2, inbox: true }\n`);
+    ADAPTERS.threads = { ...ADAPTERS.threads, isLoggedIn: async () => false, readInbox: async () => [] };
+    try {
+      const first = await syncAccount(ctx, "acme-threads-2");
+      expect(first.error).toMatch(/not logged in/);
+      expect((await chromeStatus(ctx, "acme-threads-2")).alive).toBe(false); // it started Chrome, so it closed it
+      expect(loggedOutAccounts(ctx)["acme-threads-2"]).toBeTruthy();
+      const again = (await syncAll(ctx)).find((r) => r.account === "acme-threads-2")!;
+      expect(again.skipped).toMatch(/logged out since/);
+      expect((await chromeStatus(ctx, "acme-threads-2")).alive).toBe(false);
+    } finally {
+      ADAPTERS.threads = { ...ADAPTERS.threads, isLoggedIn: async () => true };
+    }
   }, 60_000);
 
   it("an MCP session closes what it opened when the agent goes away", async () => {

@@ -3,7 +3,7 @@ import path from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { adapterFor, type AdapterEnv } from "../browser/adapters/index.js";
+import { adapterFor } from "../browser/adapters/index.js";
 import { closeAllOwnedTabs, closeChrome, closeOwnedTabs, getPage, goto, RESEARCH_PROFILE, setActivePage, shotPath } from "../browser/chrome.js";
 import { locatorFor, snapshot, typeInto, visibleText } from "../browser/snapshot.js";
 import { dispatchDue, dispatchOne } from "../channels/dispatch.js";
@@ -24,6 +24,7 @@ import { fetchFeedAndObserve, momentum, observe } from "../core/trends.js";
 import { syncAccount, syncAll } from "../inbox/sync.js";
 import { renderContent } from "../render/carousel.js";
 import { openInBrowser, writeReport } from "../report/render.js";
+import { checkLogin } from "../setup/deps.js";
 import { saveProfile, scanSite } from "../research/site.js";
 
 type Content = { type: "text"; text: string } | { type: "image"; data: string; mimeType: string };
@@ -539,17 +540,9 @@ export function createServer(ctx: Ctx): McpServer {
 
   tool("browser_close", "Close the account's whole Chrome window, including tabs the human opened (the login stays in its profile). Prefer browser_done.", { account: acct }, async ({ account }) => ({ closed: await closeChrome(ctx, account) }));
 
-  tool("browser_login_status", "Check whether an account's browser profile is logged in to its platform (opens a temporary tab).", { account: acct }, async ({ account }) => {
+  tool("browser_login_status", "Check whether an account's browser profile is logged in to its platform (opens a temporary tab and closes it).", { account: acct }, async ({ account }) => {
     const a = getAccount(ctx, account);
-    const adapter = adapterFor(a.platform);
-    const page = await getPage(ctx, account, { newTab: true });
-    try {
-      const env: AdapterEnv = { ctx, account: a, page, dryRun: true, shot: async () => "", log: () => {}, goto: (u) => goto(ctx, page, u) };
-      await env.goto(adapter.homeUrl);
-      return { account, platform: a.platform, loggedIn: await adapter.isLoggedIn(env), loginUrl: adapter.loginUrl };
-    } finally {
-      await page.close().catch(() => {});
-    }
+    return { account, platform: a.platform, loggedIn: await checkLogin(ctx, account), loginUrl: adapterFor(a.platform).loginUrl };
   });
 
   if (browserActions) {

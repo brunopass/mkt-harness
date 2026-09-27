@@ -2,7 +2,8 @@ import crypto from "node:crypto";
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { adapterFor, AdapterError, type AdapterEnv } from "../browser/adapters/index.js";
-import { getPage, goto, shotPath } from "../browser/chrome.js";
+import type { Page } from "playwright-core";
+import { goto, markLoggedIn, markLoggedOut, recentlyLoggedOut, shotPath, withJobPage } from "../browser/chrome.js";
 import { getAccount, listAccounts } from "../core/brands.js";
 import type { Ctx } from "../core/config.js";
 import { getThread, logMessages, threadKey, type MessageInput } from "../core/conversations.js";
@@ -41,9 +42,20 @@ export async function syncAccount(ctx: Ctx, accountId: string, opts: { limit?: n
 }
 
 /** Accounts flagged `inbox: true` (optionally for one brand). */
+/**
+ * Accounts flagged `inbox: true` (optionally for one brand). Skips the shipped example brand, and browser accounts
+ * found logged out in the last 24 hours, so a background sync doesn't open Chrome for them every few minutes.
+ */
 export async function syncAll(ctx: Ctx, brand?: string): Promise<SyncResult[]> {
   const out: SyncResult[] = [];
-  for (const a of listAccounts(ctx, brand).filter((a) => a.inbox && a.active)) out.push(await syncAccount(ctx, a.id));
+  for (const a of listAccounts(ctx, brand).filter((a) => a.inbox && a.active && (brand === "example" || a.brand !== "example"))) {
+    const lo = a.transport === "browser" ? recentlyLoggedOut(ctx, a.id) : undefined;
+    if (lo) {
+      out.push({ account: a.id, fetched: 0, added: 0, optOuts: 0, skipped: `logged out since ${lo.at}: mkt browser open ${a.id}, then mkt browser check` });
+      continue;
+    }
+    out.push(await syncAccount(ctx, a.id));
+  }
   return out;
 }
 
@@ -52,7 +64,10 @@ export async function syncAll(ctx: Ctx, brand?: string): Promise<SyncResult[]> {
 async function readBrowserInbox(ctx: Ctx, account: Account & { brand: string }, limit: number): Promise<MessageInput[]> {
   const adapter = adapterFor(account.platform);
   if (!adapter.readInbox) throw new MktError(`the ${account.platform} adapter cannot read the inbox yet`);
-  const page = await getPage(ctx, account.id, { newTab: true });
+  return withJobPage(ctx, account.id, (page) => readInbox(ctx, account, adapter, page, limit));
+}
+
+async function readInbox(ctx: Ctx, account: Account & { brand: string }, adapter: ReturnType<typeof adapterFor>, page: Page, limit: number): Promise<MessageInput[]> {
   const env: AdapterEnv = {
     ctx, account, page, dryRun: true,
     shot: async (label) => {
@@ -63,10 +78,14 @@ async function readBrowserInbox(ctx: Ctx, account: Account & { brand: string }, 
     log: () => {},
     goto: (u) => goto(ctx, page, u),
   };
-  try {
+  {
     await env.goto(adapter.homeUrl);
-    if (!(await adapter.isLoggedIn(env))) throw new AdapterError("login", `${account.id} is not logged in: mkt browser open ${account.id}`);
-    const threads = await adapter.readInbox(env, { limit, unreadOnly: false });
+    if (!(await adapter.isLoggedIn(env))) {
+      markLoggedOut(ctx, account.id, "inbox sync");
+      throw new AdapterError("login", `${account.id} is not logged in: mkt browser open ${account.id}`);
+    }
+    markLoggedIn(ctx, account.id);
+    const threads = await adapter.readInbox!(env, { limit, unreadOnly: false });
     const now = Date.now();
     const out: MessageInput[] = [];
     const norm = (s: string) => s.replace(/\s+/g, " ").trim();
@@ -86,8 +105,6 @@ async function readBrowserInbox(ctx: Ctx, account: Account & { brand: string }, 
       });
     }
     return out;
-  } finally {
-    await page.close().catch(() => {});
   }
 }
 

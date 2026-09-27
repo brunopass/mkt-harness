@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import nodemailer from "nodemailer";
 import { adapterFor, type AdapterEnv } from "../browser/adapters/index.js";
-import { chromeStatus, closeChrome, ensureChrome, getPage, goto } from "../browser/chrome.js";
+import { chromeStatus, closeChrome, ensureChrome, getPage, goto, markLoggedIn, markLoggedOut, withJobPage } from "../browser/chrome.js";
 import { getAccount } from "../core/brands.js";
 import type { Ctx } from "../core/config.js";
 import { launchdPlist } from "../daemon.js";
@@ -13,20 +13,18 @@ import { copyToClipboard, openExternal } from "../core/os.js";
 import { detectTools, engineOf, type Surface } from "./helpers.js";
 import type { ResearchRun, SetupDeps } from "./tui.js";
 
-/** Is this account's Chrome profile logged in? Opens a temporary tab; leaves Chrome as it found it. */
+/** Is this account's Chrome profile logged in? Opens a temporary tab; leaves Chrome as it found it. Records the answer. */
 export async function checkLogin(ctx: Ctx, accountId: string): Promise<boolean> {
   const account = getAccount(ctx, accountId);
   const adapter = adapterFor(account.platform);
-  const wasRunning = (await chromeStatus(ctx, accountId)).alive;
-  const page = await getPage(ctx, accountId, { newTab: true });
-  try {
+  const ok = await withJobPage(ctx, accountId, async (page) => {
     const env: AdapterEnv = { ctx, account, page, dryRun: true, shot: async () => "", log: () => {}, goto: (u) => goto(ctx, page, u) };
     await env.goto(adapter.homeUrl).catch(() => {});
-    return await adapter.isLoggedIn(env);
-  } finally {
-    await page.close().catch(() => {});
-    if (!wasRunning) await closeChrome(ctx, accountId);
-  }
+    return adapter.isLoggedIn(env);
+  });
+  if (ok) markLoggedIn(ctx, accountId);
+  else markLoggedOut(ctx, accountId, "login check");
+  return ok;
 }
 
 /** A visible Chrome window for this account, on the platform's login page. */

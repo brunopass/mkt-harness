@@ -271,7 +271,7 @@ Each account gets its own Chrome profile in `workspace/.profiles/<account>` with
 > [!IMPORTANT]
 > Platforms change their pages constantly. Run `mkt send <id> --dry-run` once per account before trusting an adapter: it fills the composer, takes a screenshot and stops before sending. When an adapter breaks, the agent can finish the item by hand under `outbox_claim` / `outbox_complete`, following the platform's [playbook](skills/browser-ops/references/platforms/).
 
-No tab is left behind: agents work in a tab the harness opens (never one you have open) and finish with `browser_done`, which closes the harness's tabs and Chrome itself when nothing else is open. Tabs the harness opened also close after 10 idle minutes (`browser.idleTabMin`) and when the agent session ends; dry runs keep the screenshot and close the tab (`--keep-open` to look at it live).
+No tab is left behind: agents work in a tab the harness opens (never one you have open) and finish with `browser_done`, which closes the harness's tabs and Chrome itself when nothing else is open. Tabs the harness opened also close after 10 idle minutes (`browser.idleTabMin`) and when the agent session ends; dry runs keep the screenshot and close the tab (`--keep-open` to look at it live). Background jobs (sending, inbox sync, login checks) close Chrome again if they had to start it, and an account found logged out is skipped by the background service until you log in (`mkt browser check`), instead of opening Chrome every 15 minutes.
 
 ## Automation
 
