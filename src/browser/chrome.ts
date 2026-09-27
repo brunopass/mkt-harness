@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -70,11 +70,23 @@ function devtoolsPort(dir: string): number | undefined {
   }
 }
 
-/** The running Chrome for this profile, if any: the recorded port must match the profile's own DevToolsActivePort. */
+/** Does this pid run Chrome with this profile? (Ownership check for instances started before DevToolsActivePort.) */
+function pidRunsProfile(pid: number | undefined, dir: string): boolean {
+  if (!pid || process.platform === "win32") return false;
+  const r = spawnSync("ps", ["-o", "command=", "-p", String(pid)], { encoding: "utf8" });
+  return r.status === 0 && r.stdout.includes(`--user-data-dir=${dir}`);
+}
+
+/**
+ * The running Chrome for this profile, if any. The recorded port must match the profile's own DevToolsActivePort, or,
+ * for a Chrome started by an older mkt with a fixed port, the recorded process must be running this profile.
+ */
 async function runningPort(ctx: Ctx, account: string): Promise<number | undefined> {
   const st = readJson<ProfileState | null>(profileStateFile(ctx, account), null);
-  const port = devtoolsPort(profileDir(ctx, account));
-  return st?.port && port === st.port && (await isAlive(port)) ? port : undefined;
+  if (!st?.port) return undefined;
+  const dir = profileDir(ctx, account);
+  const owned = devtoolsPort(dir) === st.port || pidRunsProfile(st.pid, dir);
+  return owned && (await isAlive(st.port)) ? st.port : undefined;
 }
 
 export async function chromeStatus(ctx: Ctx, account: string): Promise<{ account: string; port?: number; alive: boolean; headless?: boolean; profile: string }> {

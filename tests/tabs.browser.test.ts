@@ -1,4 +1,6 @@
+import { spawn } from "node:child_process";
 import fs from "node:fs";
+import net from "node:net";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
@@ -8,7 +10,7 @@ import { chromium } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { dryRunStop, typeText } from "../src/browser/adapters/helpers.js";
 import { ADAPTERS, type PlatformAdapter } from "../src/browser/adapters/index.js";
-import { chromeStatus, closeChrome, closeOwnedTabs, detachAll, getPage, isAlive, loggedOutAccounts, ownedPages, withJobPage } from "../src/browser/chrome.js";
+import { chromePath, chromeStatus, closeChrome, closeOwnedTabs, detachAll, getPage, isAlive, loggedOutAccounts, ownedPages, profileDir, withJobPage } from "../src/browser/chrome.js";
 import { syncAccount, syncAll } from "../src/inbox/sync.js";
 import { dispatchOne } from "../src/channels/dispatch.js";
 import { draftOutbox } from "../src/core/outbox.js";
@@ -56,7 +58,7 @@ run("browser tabs are cleaned up", () => {
 
   afterAll(async () => {
     ADAPTERS.threads = original;
-    for (const a of ["acme-x", "acme-threads", "acme-ig"]) await closeChrome(ctx, a);
+    for (const a of ["acme-x", "acme-threads", "acme-threads-2", "acme-ig", "acme-legacy", "research"]) await closeChrome(ctx, a);
     await detachAll();
     server.closeAllConnections();
     server.close();
@@ -145,6 +147,40 @@ run("browser tabs are cleaned up", () => {
       expect((await chromeStatus(ctx, "acme-threads-2")).alive).toBe(false);
     } finally {
       ADAPTERS.threads = { ...ADAPTERS.threads, isLoggedIn: async () => true };
+    }
+  }, 60_000);
+
+  it("recognises (and closes) a Chrome started by an older mkt on a fixed port, but never another profile's", async () => {
+    const freePort = () => new Promise<number>((r) => { const srv = net.createServer().listen(0, "127.0.0.1", () => { const p = (srv.address() as AddressInfo).port; srv.close(() => r(p)); }); });
+    const launchLegacy = async (account: string) => {
+      const dir = profileDir(ctx, account);
+      fs.mkdirSync(dir, { recursive: true });
+      const port = await freePort();
+      const child = spawn(chromePath(ctx), [`--user-data-dir=${dir}`, `--remote-debugging-port=${port}`, "--headless=new", "--no-first-run", "about:blank"], { detached: true, stdio: "ignore" });
+      child.unref();
+      const deadline = Date.now() + 15_000;
+      while (Date.now() < deadline && !(await isAlive(port))) await new Promise((r) => setTimeout(r, 200));
+      fs.rmSync(path.join(dir, "DevToolsActivePort"), { force: true }); // what older launches looked like
+      fs.writeFileSync(path.join(dir, "mkt-browser.json"), JSON.stringify({ port, pid: child.pid, headless: true, startedAt: new Date().toISOString() }));
+      return { port, pid: child.pid! };
+    };
+    fs.appendFileSync(`${ctx.ws}/brands/acme/accounts.yaml`, `  - { id: acme-legacy, platform: x, handle: legacy }\n  - { id: acme-other, platform: x, handle: other }\n`);
+    const legacy = await launchLegacy("acme-legacy");
+    try {
+      expect(await isAlive(legacy.port)).toBe(true);
+      expect(await chromeStatus(ctx, "acme-legacy")).toMatchObject({ alive: true, port: legacy.port });
+      // another account whose state file points at acme-legacy's Chrome: not ours, never adopted or closed
+      fs.mkdirSync(profileDir(ctx, "acme-other"), { recursive: true });
+      fs.writeFileSync(path.join(profileDir(ctx, "acme-other"), "mkt-browser.json"), JSON.stringify({ port: legacy.port, pid: legacy.pid }));
+      expect((await chromeStatus(ctx, "acme-other")).alive).toBe(false);
+      expect(await closeChrome(ctx, "acme-other")).toBe(false);
+      expect(await isAlive(legacy.port)).toBe(true);
+      expect(await closeChrome(ctx, "acme-legacy")).toBe(true);
+      expect(await isAlive(legacy.port)).toBe(false);
+    } finally {
+      try {
+        process.kill(legacy.pid);
+      } catch {}
     }
   }, 60_000);
 
