@@ -5,6 +5,16 @@ SOURCE="${BASH_SOURCE[0]}"
 while [ -L "$SOURCE" ]; do DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"; SOURCE="$(readlink "$SOURCE")"; [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"; done
 ROOT="$(cd -P "$(dirname "$SOURCE")/.." && pwd)"
 
+# The terminal's real device (/dev/ttys003, /dev/pts/3). Input redirected from the generic /dev/tty (as `curl | bash`
+# installers must do) breaks Bun-based agents on macOS ("EINVAL: invalid argument, kqueue"); the real device works.
+real_tty() {
+  local t
+  t="$(ps -o tty= -p $$ 2>/dev/null | tr -d ' ')"
+  case "$t" in "" | "?" | "??") return 1 ;; esac
+  case "$t" in /dev/*) ;; *) t="/dev/$t" ;; esac
+  [ -r "$t" ] && [ -w "$t" ] && printf '%s' "$t"
+}
+
 node_ok() { command -v node >/dev/null 2>&1 && node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=12)?0:1)'; }
 if ! node_ok && [ -s "$HOME/.nvm/nvm.sh" ]; then
   . "$HOME/.nvm/nvm.sh" >/dev/null
@@ -37,6 +47,9 @@ if [ -s "$HANDOFF" ]; then
   while IFS= read -r -d '' arg; do ARGS+=("$arg"); done < "$HANDOFF"
   rm -f "$HANDOFF"
   cd "$ROOT"
+  if [ -t 0 ] && TTY_DEV="$(real_tty)"; then
+    exec "${ARGS[@]}" < "$TTY_DEV"
+  fi
   exec "${ARGS[@]}"
 fi
 rm -f "$HANDOFF"

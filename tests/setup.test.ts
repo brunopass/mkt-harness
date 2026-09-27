@@ -350,6 +350,28 @@ describe("guided setup", () => {
 });
 
 describe("agent hand-off", () => {
+  // `curl | bash` installers read the keyboard from the generic /dev/tty; Bun-based agents (Claude Code) crash on it on
+  // macOS with "EINVAL: invalid argument, kqueue". The hand-off must give the agent the terminal's real device.
+  it.runIf(process.platform === "darwin")("gives the agent the real terminal device even when mkt was started with < /dev/tty", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mkt-tty-"));
+    const fake = path.join(dir, "fake-claude");
+    fs.writeFileSync(fake, `#!/usr/bin/env bash\ntty > "$MKT_TEST_OUT.tty"\n`);
+    fs.chmodSync(fake, 0o755);
+    const cfg = path.join(dir, "mkt.config.yaml");
+    fs.writeFileSync(cfg, `runner:\n  claude:\n    bin: ${JSON.stringify(fake)}\n`);
+    const out = path.join(dir, "out");
+    const inner = `${JSON.stringify(path.join(ROOT, "bin", "mkt"))} open claude < /dev/tty`;
+    const r = spawnSync("script", ["-q", "/dev/null", "bash", "-c", `true | bash -c ${JSON.stringify(inner)}`], {
+      env: { ...process.env, MKT_CONFIG: cfg, MKT_WORKSPACE: path.join(dir, "ws"), MKT_TEST_OUT: out },
+      encoding: "utf8",
+      timeout: 60_000,
+      stdio: ["ignore", "pipe", "pipe"], // script(1) refuses a socket as its input
+    });
+    expect(r.status, r.stderr).toBe(0);
+    const tty = fs.readFileSync(`${out}.tty`, "utf8").trim();
+    expect(tty).toMatch(/^\/dev\/(ttys\d+|pts\/\d+)$/);
+  });
+
   it("bin/mkt open execs the agent with the exact arguments: no shell evaluation, no Node parent left", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mkt-handoff-"));
     const fake = path.join(dir, "fake-claude");

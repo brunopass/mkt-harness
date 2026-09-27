@@ -40,8 +40,16 @@ if [ "${MKT_NO_SETUP:-}" = "1" ]; then
   bold "Installed. Start with: $DIR/bin/mkt"
   exit 0
 fi
-if [ -r /dev/tty ] && [ -t 1 ]; then
-  # stdin is this script when piped from curl: give the setup the real terminal
-  exec "$DIR/bin/mkt" setup < /dev/tty
+# stdin is this script when piped from curl: give the setup the terminal back. Prefer the real device over the generic
+# /dev/tty alias, which Bun-based agents (Claude Code) can't watch on macOS.
+real_tty() {
+  t="$(ps -o tty= -p $$ 2>/dev/null | tr -d ' ')"
+  case "$t" in "" | "?" | "??") return 1 ;; esac
+  case "$t" in /dev/*) ;; *) t="/dev/$t" ;; esac
+  [ -r "$t" ] && [ -w "$t" ] && printf '%s' "$t"
+}
+if [ -t 1 ] && [ -r /dev/tty ]; then
+  TTY_DEV="$(real_tty || printf '/dev/tty')"
+  exec "$DIR/bin/mkt" setup < "$TTY_DEV"
 fi
 bold "Installed. Start with: $DIR/bin/mkt"
