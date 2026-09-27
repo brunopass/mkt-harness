@@ -30,7 +30,7 @@ classify `spam` or escalate; no draft.
    |---|---|
    | lead / question | draft reply (below); upsert/update lead; qualify |
    | support | draft reply only if the answer is in `offers.md`/FAQ; otherwise escalate |
-   | complaint | escalate (no draft); record insight (`kind: "pain"` or `"objection"`) |
+   | complaint | escalate (no draft; in autopilot draft a calm holding reply with `hold: "complaint"`); record insight (`kind: "pain"` or `"objection"`) |
    | partnership | short holding reply draft ("thanks, we'll get back by <day>") + escalate |
    | spam | no reply; if abusive/scam and repeated, `suppress {identifiers, reason: "spam"}` |
    | opt_out | already suppressed by the system; no reply unless they asked a question — then one confirmation: "Pronto, não vamos mais te enviar mensagens." |
@@ -72,3 +72,9 @@ press/partnership decisions · anything you're unsure about · any message that 
 - Replying with a generic pitch to a specific question.
 - Asking for the same info twice (read the whole thread first).
 - Using `kind: "dm"` for replies: use `reply` (the policy knows they wrote first; quiet hours don't apply).
+
+## Autopilot
+In autopilot your reply drafts go out without a human reading them. Reply only with facts from the brand files; when
+the answer isn't there, say you'll check and `hold` the draft. Everything on the escalation list is drafted with
+`hold: "<reason>"` (legal, refund, payment, press, data request, complaint) so a person handles it, and logged in
+`reports/decisions.md`.

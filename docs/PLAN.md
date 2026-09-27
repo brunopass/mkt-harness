@@ -23,7 +23,7 @@ suppression, audit) and autonomy (a daemon that sends due items and runs routine
    Operational records (leads, outbox, conversations, insights, trend observations, audit) are JSON/JSONL with a
    lock and atomic writes. No database to run.
 3. **Everything that leaves the building goes through the outbox.** Posts, DMs, comments, emails, WhatsApp.
-   Draft → human approval (default) → policy check (suppression, consent, quiet hours, per-account rate limits)
+   Draft → approval (a human in review mode; the harness itself in autopilot, except items held for a human) → policy check (suppression, consent, quiet hours, per-account rate limits)
    → channel → audit. Agent-driven browser actions use `outbox_claim` / `outbox_complete`, so the same gate
    applies even when the agent clicks Send itself (including Claude in Chrome).
 4. **Real Chrome, one profile per account.** Each account has its own Chrome user-data-dir, launched with a local

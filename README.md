@@ -14,7 +14,7 @@
 
 **mkt-harness** turns [Claude Code](https://docs.anthropic.com/en/docs/claude-code) or [Codex](https://developers.openai.com/codex) into a marketing team. It studies the brand and its customers, follows trends and forecasts where they are going, plans content, writes scripts and carousels, finds and qualifies leads, writes personal outreach, answers the inbox, and posts to many accounts through real Chrome windows.
 
-Nothing reaches a person until you approve it. You ask for outcomes, like this (illustrative):
+By default nothing reaches a person until you approve it. Switch on **autopilot** and the agents decide and send on their own, inside limits they can't override. You ask for outcomes, like this (illustrative):
 
 ```text
 you   ›  Find agency owners in São Paulo who complained about no-shows this month and draft a first message for the best 10.
@@ -122,9 +122,28 @@ sequenceDiagram
   O->>A: lead, conversation and audit updated
 ```
 
-The policy checks, in order: the account is active and belongs to the brand · someone approved it · the recipient isn't suppressed or `do_not_contact` · a reply only goes to someone who wrote first · a first WhatsApp message needs opt-in and a cold email needs a recorded basis · no more than 4 unanswered touches, 48 h apart · cold outreach waits for the brand's morning · each account stays within its daily limit and minimum gap.
+The policy checks, in order: the account is active and belongs to the brand · it isn't held for a human · someone (or autopilot) approved it · the recipient isn't suppressed or `do_not_contact` · a reply only goes to someone who wrote first · a first WhatsApp message needs opt-in and a cold email needs a recorded basis · no more than 4 unanswered touches, 48 h apart · cold outreach waits for the brand's morning · each account stays within its daily limit and minimum gap.
 
 When someone answers "stop", "unsubscribe", "sair", "darme de baja" or "désabonner", the harness suppresses them, closes the lead and cancels everything queued for them before the next send.
+
+### Review mode and autopilot
+
+| | Review mode (default) | Autopilot |
+|---|---|---|
+| Who approves | you, in `mkt review` | the harness, as soon as an agent drafts |
+| Agents ask you | when a decision is yours (positioning, offers, prices) | never: they decide, and log each call in `reports/decisions.md` |
+| What goes out alone | nothing | the kinds you pick: posts, replies, DMs/WhatsApp, comments, connection requests, cold email |
+| Held for you anyway | | legal threats, refunds and payments, press, personal-data requests, angry complaints (`hold`); only a person can release them |
+| Still enforced | everything above | everything above: suppression and opt-outs, consent, quiet hours, touch and rate limits |
+
+```sh
+mkt autopilot on                       # all kinds; or --kinds post,reply
+mkt autopilot on --approve-pending     # also approve what's already waiting (never held items)
+mkt autopilot off                      # back to review: what autopilot approved and hasn't sent returns to mkt review
+mkt autopilot status
+```
+
+The same switch is in the setup (`mkt` › Autopilot). With autopilot on, Claude Code may also send and use the browser without asking (written to your personal `.claude/settings.local.json`, never committed).
 
 ## Quick start
 
@@ -246,7 +265,7 @@ Each account gets its own Chrome profile in `workspace/.profiles/<account>` with
 
 ## Automation
 
-Routines in [`mkt.config.yaml`](mkt.config.yaml) are cron jobs for the agent. They run headless with a restricted tool profile: research, write files, update records, draft to the outbox. They cannot send, claim or type into a browser unless you allow clicks for that routine.
+Routines in `mkt.config.yaml` (created from [`templates/mkt.config.yaml`](templates/mkt.config.yaml)) are cron jobs for the agent. They run headless with a restricted tool profile: research, write files, update records, draft to the outbox. They cannot send, claim or type into a browser unless you allow clicks for that routine.
 
 ```yaml
 routines:
@@ -304,6 +323,7 @@ mkt send <id> [--dry-run]      mkt send --due
 mkt inbox sync [account] | list <brand> [--needs-reply]
 mkt trends fetch <brand> <feed|google-trends:BR> | momentum <brand> [--days]
 mkt suppress <email|+phone|platform:handle...> --reason <text>
+mkt autopilot on|off|status [--kinds post,reply,...] [--approve-pending]
 mkt audit [--tail n]
 mkt agent "<task>" [--brand --engine claude|codex --browser-actions --print-command]
 mkt routine list | run <name>
@@ -342,7 +362,7 @@ workspace/brands/<brand>/
 
 ## Configuration
 
-- [`mkt.config.yaml`](mkt.config.yaml): approval per message type, quiet hours, rate limits, outreach rules, browser, routines, runner.
+- `mkt.config.yaml` (per install, created from [`templates/mkt.config.yaml`](templates/mkt.config.yaml)): review or autopilot, approval per message type, quiet hours, rate limits, outreach rules, browser, routines, runner.
 - `.env` (gitignored, mode 600, see [`.env.example`](.env.example)): SMTP/IMAP URLs and WhatsApp Cloud tokens, written by the setup. `accounts.yaml` refers to them by name only.
 - `workspace/.profiles/` holds live logged-in sessions: treat it like a password manager. Real brands, profiles, logs and state are gitignored; only the example brand is versioned.
 
@@ -366,6 +386,7 @@ What the tests cover, including the adversarial cases:
 | Setup TUI | the whole first run with scripted answers, the menu, pre-fill from a domain, background research | invalid answers, SMTP failures, a site that can't be read, `.env` values with `$( )`, mixed quotes and line breaks (checked with Node's own loader) |
 | Agent hand-off | `mkt open` through the real shell script | arguments with `$( )`, backticks, `;`, `*`, `-rf`: passed literally, nothing executed, no Node parent left behind |
 | Browser | snapshot refs, dry run vs real send against a fake social site, adapter failure screenshots, renderer | |
+| Autopilot | drafts approved as autopilot, kinds respected, re-approval after edits, switching on and off (pending items, config, local Claude permissions) | held items can't be released by an agent (or sent if forged), suppression after approval, opt-out replies cancel what autopilot queued, consent, quiet hours, touch and rate limits, replies to people who never wrote |
 | Skills | frontmatter, only real tool names, links resolve | no subagent can approve or run shell commands |
 
 ## Roadmap
@@ -384,7 +405,7 @@ What the tests cover, including the adversarial cases:
 
 ## Responsible use
 
-mkt-harness speaks for real brands through their real accounts. It will not run fake personas, impersonate anyone, invent reviews or proof, or make your own accounts engage with each other to fake traction. Opt-outs are permanent, first WhatsApp messages need consent, cold email carries an opt-out and a sender identity, and personal data stays minimal with its source recorded. The full rules are in [`AGENTS.md`](AGENTS.md).
+mkt-harness speaks for real brands through their real accounts. It will not run fake personas, impersonate anyone, invent reviews or proof, or make your own accounts engage with each other to fake traction. Opt-outs are permanent, first WhatsApp messages need consent, cold email carries an opt-out and a sender identity, and personal data stays minimal with its source recorded. Autopilot doesn't relax any of this. The full rules are in [`AGENTS.md`](AGENTS.md).
 
 ---
 

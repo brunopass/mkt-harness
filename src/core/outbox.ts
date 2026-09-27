@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { approvalRequired, type Ctx } from "./config.js";
+import { approvalRequired, autoApprover, autopilotFor, isHumanApproval, type Ctx } from "./config.js";
 import { getAccount, listBrands } from "./brands.js";
 import { logMessages } from "./conversations.js";
 import { isSuppressed, recipientIds } from "./identity.js";
@@ -23,6 +23,8 @@ export interface DraftInput {
   scheduledFor?: string;
   /** "draft" keeps it out of the approval queue until someone submits it */
   status?: "draft" | "pending_approval";
+  /** keep for a human even in autopilot: the reason (legal threat, refund, press, complaint, data request...) */
+  hold?: string;
 }
 
 export function listOutbox(ctx: Ctx, brand?: string, f: { status?: string[]; account?: string; kind?: string; leadId?: string; sequence?: string; limit?: number } = {}): OutboxItem[] {
@@ -74,7 +76,7 @@ export function draftOutbox(ctx: Ctx, input: DraftInput): OutboxItem {
   if (sup) throw new MktError(`recipient is suppressed (${sup.id}: ${sup.reason})`);
 
   const at = nowIso();
-  const needsApproval = approvalRequired(ctx, input.kind);
+  const needsApproval = !!input.hold || approvalRequired(ctx, input.kind);
   const item = OutboxItem.parse({
     ...input,
     // fill the recipient from the lead so the channel has something to address
@@ -83,14 +85,14 @@ export function draftOutbox(ctx: Ctx, input: DraftInput): OutboxItem {
     platform: account.platform,
     media: input.media ?? [],
     status: input.status ?? (needsApproval ? "pending_approval" : "approved"),
-    approval: needsApproval ? undefined : { by: "policy:auto", at },
+    approval: needsApproval ? undefined : { by: autoApprover(ctx, input.kind), at },
     attempts: 0,
     createdBy: ctx.actor,
     createdAt: at,
     updatedAt: at,
   });
   updateJson<OutboxItem[]>(outboxFile(ctx, input.brand), [], (items) => void items.push(item));
-  audit(ctx, "outbox.draft", { brand: item.brand, ref: item.id, detail: { kind: item.kind, account: item.account, status: item.status } });
+  audit(ctx, "outbox.draft", { brand: item.brand, ref: item.id, detail: { kind: item.kind, account: item.account, status: item.status, approvedBy: item.approval?.by, hold: item.hold } });
   return item;
 }
 
@@ -106,7 +108,10 @@ function fillRecipient(to: Recipient, lead: Lead, platform: string): Recipient {
 
 const EDITABLE: OutboxStatus[] = ["draft", "pending_approval", "approved", "failed", "blocked"];
 
-/** Editing the message of an approved item sends it back for approval: approval covers exact words. */
+/**
+ * Editing the message of a human-approved item sends it back for approval: approval covers exact words. Items the
+ * harness approved (policy or autopilot) are re-approved automatically if their kind still needs no human.
+ */
 export function updateOutbox(
   ctx: Ctx,
   id: string,
@@ -118,12 +123,20 @@ export function updateOutbox(
     const { submit, ...fields } = patch;
     const contentChanged = ["body", "subject", "media", "to"].some((k) => (fields as any)[k] !== undefined);
     Object.assign(it, Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined)));
-    if (contentChanged && it.approval && it.approval.by !== "policy:auto") {
-      it.approval = undefined;
-      it.status = "pending_approval";
+    const auto = !it.hold && !approvalRequired(ctx, it.kind);
+    if (contentChanged && it.status !== "draft") {
+      if (auto) {
+        it.approval = { by: autoApprover(ctx, it.kind), at: nowIso() };
+        it.status = "approved";
+      } else if (it.approval) {
+        it.approval = undefined;
+        it.status = "pending_approval";
+      } else if (["failed", "blocked"].includes(it.status)) it.status = "pending_approval";
     }
-    if (["failed", "blocked"].includes(it.status) && contentChanged) it.status = it.approval ? "approved" : "pending_approval";
-    if (submit && it.status === "draft") it.status = approvalRequired(ctx, it.kind) ? "pending_approval" : "approved";
+    if (submit && it.status === "draft") {
+      it.status = auto ? "approved" : "pending_approval";
+      if (auto) it.approval = { by: autoApprover(ctx, it.kind), at: nowIso() };
+    }
     it.notBefore = undefined;
   });
   audit(ctx, "outbox.update", { brand: it.brand, ref: id, detail: { fields: Object.keys(patch), status: it.status } });
@@ -133,6 +146,8 @@ export function updateOutbox(
 export function approveOutbox(ctx: Ctx, ids: string[], note?: string): OutboxItem[] {
   return ids.map((id) => {
     const cur = getOutbox(ctx, id);
+    if (cur.hold && !isHumanApproval(ctx.actor))
+      throw new MktError(`${id} is held for a human (${cur.hold}): only mkt review / mkt approve can release it`);
     if (!["draft", "pending_approval", "blocked", "failed"].includes(cur.status))
       throw new MktError(`cannot approve ${id}: status ${cur.status}`);
     const it = mutate(ctx, cur.brand, id, (it) => {
@@ -142,6 +157,35 @@ export function approveOutbox(ctx: Ctx, ids: string[], note?: string): OutboxIte
       it.notBefore = undefined;
     });
     audit(ctx, "outbox.approve", { brand: it.brand, ref: id, detail: { note } });
+    return it;
+  });
+}
+
+/** Autopilot switched on: approve what's waiting (never held items, only kinds on autopilot). */
+export function approvePendingForAutopilot(ctx: Ctx, brand?: string): OutboxItem[] {
+  const ids = listOutbox(ctx, brand, { status: ["pending_approval"] }).filter((i) => !i.hold && autopilotFor(ctx, i.kind)).map((i) => i.id);
+  return ids.map((id) => {
+    const cur = getOutbox(ctx, id);
+    const it = mutate(ctx, cur.brand, id, (it) => {
+      it.status = "approved";
+      it.approval = { by: "autopilot", at: nowIso() };
+    });
+    audit(ctx, "outbox.approve", { brand: it.brand, ref: id, detail: { by: "autopilot" } });
+    return it;
+  });
+}
+
+/** Autopilot switched off: what it approved and hasn't sent goes back to a human. */
+export function revokeAutopilotApprovals(ctx: Ctx, brand?: string): OutboxItem[] {
+  const ids = listOutbox(ctx, brand, { status: ["approved", "failed", "blocked"] }).filter((i) => i.approval?.by === "autopilot").map((i) => i.id);
+  return ids.map((id) => {
+    const cur = getOutbox(ctx, id);
+    const it = mutate(ctx, cur.brand, id, (it) => {
+      it.status = "pending_approval";
+      it.approval = undefined;
+      it.notBefore = undefined;
+    });
+    audit(ctx, "outbox.autopilot_revoked", { brand: it.brand, ref: id });
     return it;
   });
 }

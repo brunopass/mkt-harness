@@ -26,6 +26,14 @@ export const Config = z.object({
   workspace: z.string().default("./workspace"),
   timezone: z.string().default("UTC"),
   engine: z.enum(["claude", "codex"]).default("claude"),
+  /**
+   * review: a human approves everything that reaches a person (mkt review). autopilot: the harness approves the kinds in
+   * autopilot.kinds when they're drafted and agents decide without asking; policy checks and holds still apply.
+   */
+  mode: z.enum(["review", "autopilot"]).default("review"),
+  autopilot: z
+    .object({ kinds: z.array(z.enum(OUTBOX_KINDS)).default([...OUTBOX_KINDS]) })
+    .default({ kinds: [...OUTBOX_KINDS] }),
   approval: z
     .object({
       required: z.record(z.string(), z.boolean()).default(approvalDefaults),
@@ -112,6 +120,19 @@ export function limitFor(ctx: Ctx, platform: string, kind: string, override?: Re
   return { ...base, ...(override?.[kind] ?? {}) };
 }
 
+export function autopilotFor(ctx: Ctx, kind: string): boolean {
+  return ctx.config.mode === "autopilot" && (ctx.config.autopilot.kinds as string[]).includes(kind);
+}
+
 export function approvalRequired(ctx: Ctx, kind: string): boolean {
+  if (autopilotFor(ctx, kind)) return false;
   return ctx.config.approval.required[kind] ?? true;
 }
+
+/** Who approves an item that needs no human: "autopilot" (undone when autopilot is switched off) or "policy:auto". */
+export function autoApprover(ctx: Ctx, kind: string): "autopilot" | "policy:auto" {
+  return autopilotFor(ctx, kind) ? "autopilot" : "policy:auto";
+}
+
+/** Approvals that came from a person (the CLI), as opposed to policy, autopilot or an agent. */
+export const isHumanApproval = (by?: string) => !!by && by.startsWith("human");

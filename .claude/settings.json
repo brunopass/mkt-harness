@@ -63,16 +63,6 @@
       "Bash(npm run typecheck:*)",
       "Bash(npm test:*)"
     ],
-    "ask": [
-      "mcp__mkt__outbox_dispatch",
-      "mcp__mkt__outbox_claim",
-      "mcp__mkt__outbox_complete",
-      "mcp__mkt__browser_click",
-      "mcp__mkt__browser_type",
-      "mcp__mkt__browser_press",
-      "mcp__mkt__browser_upload",
-      "mcp__mkt__browser_close"
-    ],
     "deny": [
       "mcp__mkt__outbox_approve",
       "Bash(*mkt approve*)",

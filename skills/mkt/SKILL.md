@@ -61,6 +61,8 @@ Each recommendation: one line with what it is, why now (the number from the dash
 End with the numbered list and a question like "Which one? (or tell me something else)". When the human picks, load
 that skill and follow it. Don't start work before they pick, except when the brand has nothing at all yet: then start
 the foundation directly.
+**Autopilot** (`brand_get` → `mode`): show the dashboard with a "mode: autopilot (kinds)" line, then don't ask: start
+action 1 right away and continue down the list while it makes sense. The human can interrupt any time.
 
 ## Pitfalls
 - Don't run `inbox_sync`, scans or research here: this screen must be quick and free.

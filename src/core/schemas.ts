@@ -175,6 +175,7 @@ export const OutboxItem = z.object({
   contentId: z.string().optional(),
   sequence: z.object({ name: z.string(), step: z.number().int() }).optional(),
   rationale: z.string().optional().describe("why this message, shown to the human reviewer"),
+  hold: z.string().optional().describe("keep for a human even in autopilot, with the reason (legal, refunds, press, complaints, data requests)"),
   scheduledFor: z.string().optional(),
   notBefore: z.string().optional().describe("set by policy deferrals (quiet hours, rate limits)"),
   status: OutboxStatus,

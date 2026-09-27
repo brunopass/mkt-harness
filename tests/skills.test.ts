@@ -83,7 +83,7 @@ describe("Claude Code permissions", () => {
   // Many people run Claude with defaultMode "dontAsk": anything not allowed is silently denied. The harness must list
   // what its work needs, and every mkt tool must be deliberately allowed, asked or denied.
   const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude", "settings.json"), "utf8"));
-  const { allow, ask, deny } = settings.permissions as { allow: string[]; ask: string[]; deny: string[] };
+  const { allow, deny } = settings.permissions as { allow: string[]; deny: string[] };
 
   it("allows what research and writing need, and only edits inside workspace/", () => {
     for (const t of ["Read", "Glob", "Grep", "WebSearch", "WebFetch", "Skill", "Agent", "Edit(workspace/**)"]) expect(allow, t).toContain(t);
@@ -92,10 +92,13 @@ describe("Claude Code permissions", () => {
     expect(settings.enabledMcpjsonServers).toContain("mkt");
   });
 
-  it("classifies every mkt tool, and keeps approving and sending out of the allow list", () => {
+  it("classifies every mkt tool, and keeps approving and sending out of the committed allow list", async () => {
+    const { AUTOPILOT_CLAUDE_TOOLS } = await import("../src/setup/helpers.js");
+    expect(settings.permissions.ask ?? []).toEqual([]); // an ask rule would override autopilot's local allow
     for (const t of TOOLS) {
       const id = `mcp__mkt__${t}`;
-      expect([allow.includes(id), ask.includes(id), deny.includes(id)].filter(Boolean), id).toHaveLength(1);
+      // allowed, denied, or switched on by `mkt autopilot on` (in the personal .claude/settings.local.json)
+      expect([allow.includes(id), deny.includes(id), AUTOPILOT_CLAUDE_TOOLS.includes(id)].filter(Boolean), id).toHaveLength(1);
     }
     for (const t of ["outbox_approve", "outbox_dispatch", "outbox_claim", "outbox_complete", "browser_click", "browser_type", "browser_press", "browser_upload"])
       expect(allow, t).not.toContain(`mcp__mkt__${t}`);

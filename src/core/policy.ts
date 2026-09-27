@@ -1,4 +1,4 @@
-import { approvalRequired, limitFor, type Ctx } from "./config.js";
+import { approvalRequired, isHumanApproval, limitFor, type Ctx } from "./config.js";
 import { getAccount, getBrand } from "./brands.js";
 import { hasInbound, threadKey } from "./conversations.js";
 import { isSuppressed, recipientIds } from "./identity.js";
@@ -51,7 +51,8 @@ export function checkPolicy(ctx: Ctx, item: OutboxItem, now = new Date()): Polic
   if (!account.active) return block(`account ${account.id} is inactive`);
   if (account.brand !== item.brand) return block(`account ${account.id} belongs to brand ${account.brand}, not ${item.brand}`);
   if (account.platform !== item.platform) return block(`account ${account.id} is ${account.platform}, item says ${item.platform}`);
-  if (approvalRequired(ctx, item.kind) && !item.approval) return { ok: false, block: false, reason: "awaiting human approval" };
+  if (item.hold && !isHumanApproval(item.approval?.by)) return { ok: false, block: false, reason: `held for a human: ${item.hold}` };
+  if (!item.approval && (approvalRequired(ctx, item.kind) || item.status !== "approved")) return { ok: false, block: false, reason: "awaiting human approval" };
 
   if (item.kind !== "post") {
     if (!item.to) return block(`${item.kind} needs a recipient (to)`);

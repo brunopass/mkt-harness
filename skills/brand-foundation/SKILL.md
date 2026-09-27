@@ -26,7 +26,9 @@ Global rules: [AGENTS.md](../../AGENTS.md). Never invent proof, numbers, testimo
 3. **Socials** (read-only): for each account in `account_list {brand}` open the profile with `browser_open {account, url}`
    + `browser_text {account}`; note bio, pinned posts, top 5 posts by engagement, recurring formats, tone.
    If a profile needs login and the account isn't logged in, skip it and list it under Open questions.
-4. **Interview** — ask at most these 8, in one message, in the founder's language:
+4. **Interview** (in autopilot or unattended runs: don't ask; answer each from the evidence, mark the answer
+   "assumed" with its source, log it in `reports/decisions.md`, and list them under Open questions for later) — ask at
+   most these 8, in one message, in the founder's language:
    1. Who buys most often and who gets the best results? (role/company size/life stage — be specific)
    2. What were they doing before finding you, and what finally made them switch?
    3. What do you do that alternatives can't or won't? What's the mechanism behind it?

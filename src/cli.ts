@@ -23,7 +23,7 @@ import { syncAccount, syncAll } from "./inbox/sync.js";
 import { startMcp } from "./mcp/server.js";
 import { scanSite, describeProfile, saveProfile } from "./research/site.js";
 import { checkLogin, claudeTrusted, launchAgent, realDeps } from "./setup/deps.js";
-import { initWorkspace } from "./setup/helpers.js";
+import { initWorkspace, switchMode } from "./setup/helpers.js";
 import { Cancelled, clackPrompter } from "./setup/prompter.js";
 import { homePrompt, runSetup } from "./setup/tui.js";
 import { renderContent } from "./render/carousel.js";
@@ -471,6 +471,34 @@ program
     out(r.output);
     out(c.dim(`\n${r.ok ? "ok" : "FAILED"} (${r.engine}${r.costUsd != null ? `, $${r.costUsd.toFixed(3)}` : ""}) log: ${r.logFile}`));
     if (!r.ok) process.exitCode = 1;
+  });
+
+program
+  .command("autopilot [state]")
+  .description("on: agents decide and the harness approves their drafts; off: you approve everything (mkt review); status")
+  .option("--kinds <list>", "which kinds run on autopilot (comma separated): post,reply,dm,comment,connect,email")
+  .option("--approve-pending", "when turning on: also approve what's already waiting (never held items)")
+  .action((state: string | undefined, o) => {
+    const x = ctx();
+    const kinds = o.kinds ? (o.kinds.split(",").map((k: string) => k.trim()) as any) : undefined;
+    if (!state || state === "status") {
+      const held = listOutbox(x, undefined, { status: ["pending_approval"] });
+      out(`mode: ${x.config.mode === "autopilot" ? c.yellow("autopilot") : "review"}${x.config.mode === "autopilot" ? ` (${x.config.autopilot.kinds.join(", ")})` : ""}`);
+      out(`waiting for a human: ${held.length}${held.filter((i) => i.hold).length ? ` (${held.filter((i) => i.hold).length} held)` : ""}`);
+      return;
+    }
+    if (state !== "on" && state !== "off") throw new MktError("use: mkt autopilot on | off | status");
+    const r = switchMode(x, state === "on" ? "autopilot" : "review", { kinds, approvePending: !!o.approvePending });
+    if (r.mode === "autopilot") {
+      out(c.yellow(`autopilot on for: ${r.kinds.join(", ")}`));
+      out("Agents decide and their drafts are approved automatically; the daemon sends them within the limits.");
+      out("Still enforced: do-not-contact list and opt-outs, consent, quiet hours, daily limits, and items an agent holds for you.");
+      if (r.approved) out(`approved ${r.approved} item(s) that were waiting`);
+    } else {
+      out("review mode: you approve everything in mkt review");
+      if (r.revoked) out(`${r.revoked} item(s) autopilot had approved went back to review`);
+    }
+    if (r.held) out(`${r.held} item(s) held for you: mkt review`);
   });
 
 const routine = program.command("routine").description("scheduled agent routines (mkt.config.yaml routines:)");

@@ -3,6 +3,12 @@ workspace: ./workspace
 timezone: Europe/Madrid        # routines' cron runs in this timezone; brands have their own for quiet hours
 engine: claude                 # claude | codex, for `mkt agent` and routines
 
+# review: you approve every post and message (mkt review). autopilot: agents decide and the harness approves the kinds
+# below when they're drafted; limits, consent, suppression and "hold" still apply. Switch with: mkt autopilot on|off
+mode: review
+autopilot:
+  kinds: [post, reply, dm, comment, connect, email]
+
 approval:
   # true = a human approves in `mkt review` before anything is sent
   required: { post: true, dm: true, reply: true, comment: true, connect: true, email: true }

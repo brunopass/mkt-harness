@@ -4,7 +4,9 @@ import path from "node:path";
 import YAML from "yaml";
 import { chromePath } from "../browser/chrome.js";
 import { loadConfig, type Ctx } from "../core/config.js";
-import { MktError, writeFileAtomic } from "../core/store.js";
+import { approvePendingForAutopilot, listOutbox, revokeAutopilotApprovals } from "../core/outbox.js";
+import { OUTBOX_KINDS, type OutboxKind } from "../core/schemas.js";
+import { audit, MktError, writeFileAtomic } from "../core/store.js";
 
 // ---------------------------------------------------------------- workspace
 
@@ -168,4 +170,63 @@ export function enableRoutines(ctx: Ctx, brand: string, names: string[]): string
     }
   });
   return enabled;
+}
+
+// ---------------------------------------------------------------- review / autopilot
+
+/**
+ * Tools a Claude Code session may use without asking once autopilot is on: sending approved items and driving the
+ * browser. Written to .claude/settings.local.json (personal, not committed) so review mode keeps asking for them.
+ */
+export const AUTOPILOT_CLAUDE_TOOLS = ["outbox_dispatch", "outbox_claim", "outbox_complete", "browser_click", "browser_type", "browser_press", "browser_upload", "browser_close"].map(
+  (t) => `mcp__mkt__${t}`,
+);
+
+export function setClaudeAutopilot(ctx: Ctx, on: boolean): void {
+  const file = path.join(ctx.root, ".claude", "settings.local.json");
+  let s: any = {};
+  try {
+    s = JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch (e: any) {
+    if (e.code !== "ENOENT") throw new MktError(`${file} is not valid JSON; fix it before switching modes`);
+  }
+  s.permissions ??= {};
+  const rest: string[] = (s.permissions.allow ?? []).filter((r: string) => !AUTOPILOT_CLAUDE_TOOLS.includes(r));
+  s.permissions.allow = on ? [...rest, ...AUTOPILOT_CLAUDE_TOOLS] : rest;
+  if (!s.permissions.allow.length) delete s.permissions.allow;
+  if (!Object.keys(s.permissions).length) delete s.permissions;
+  if (!Object.keys(s).length) {
+    fs.rmSync(file, { force: true });
+    return;
+  }
+  writeFileAtomic(file, JSON.stringify(s, null, 2) + "\n");
+}
+
+export interface ModeSwitch {
+  mode: "review" | "autopilot";
+  kinds: OutboxKind[];
+  approved: number;
+  revoked: number;
+  held: number;
+}
+
+/**
+ * Switch the harness between review and autopilot. Turning autopilot on can approve what's already waiting (never held
+ * items); turning it off sends everything autopilot approved and hasn't sent back to review.
+ */
+export function switchMode(ctx: Ctx, mode: "review" | "autopilot", opts: { kinds?: OutboxKind[]; approvePending?: boolean } = {}): ModeSwitch {
+  const kinds = opts.kinds ?? (ctx.config.autopilot.kinds as OutboxKind[]);
+  if (kinds.some((k) => !(OUTBOX_KINDS as readonly string[]).includes(k))) throw new MktError(`kinds must be among ${OUTBOX_KINDS.join(", ")}`);
+  const cfg = path.join(ctx.root, "mkt.config.yaml");
+  if (!fs.existsSync(cfg)) fs.copyFileSync(path.join(ctx.root, "templates", "mkt.config.yaml"), cfg);
+  editConfig(ctx, (doc) => {
+    doc.set("mode", mode);
+    doc.setIn(["autopilot", "kinds"], doc.createNode(kinds, { flow: true }));
+  });
+  setClaudeAutopilot(ctx, mode === "autopilot");
+  const approved = mode === "autopilot" && opts.approvePending ? approvePendingForAutopilot(ctx).length : 0;
+  const revoked = mode === "review" ? revokeAutopilotApprovals(ctx).length : 0;
+  const held = listOutbox(ctx, undefined, { status: ["pending_approval"] }).filter((i) => i.hold).length;
+  audit(ctx, "mode.switch", { detail: { mode, kinds, approved, revoked } });
+  return { mode, kinds, approved, revoked, held };
 }

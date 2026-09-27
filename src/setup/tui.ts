@@ -1,10 +1,11 @@
 import path from "node:path";
 import { addAccount, createBrand, getBrand, listAccounts, listBrands } from "../core/brands.js";
 import { loadConfig, type Ctx } from "../core/config.js";
-import { Account, type Platform } from "../core/schemas.js";
+import { Account, type OutboxKind, type Platform } from "../core/schemas.js";
 import { slugify, truncate } from "../core/store.js";
 import { applyProfile, describeProfile, normalizeUrl, saveProfile, type SiteProfile } from "../research/site.js";
-import { editConfig, enableRoutines, envName, initWorkspace, MAIL_PROVIDERS, upsertEnv, withAuth, type MailProvider, type ToolCheck } from "./helpers.js";
+import { editConfig, enableRoutines, envName, initWorkspace, MAIL_PROVIDERS, switchMode, upsertEnv, withAuth, type MailProvider, type ToolCheck } from "./helpers.js";
+import { listOutbox } from "../core/outbox.js";
 import type { Choice, Prompter } from "./prompter.js";
 
 type Engine = "claude" | "codex";
@@ -140,6 +141,7 @@ export async function runSetup(ctx: Ctx, p: Prompter, deps: SetupDeps): Promise<
         { value: "accounts", label: "Add accounts" },
         { value: "login", label: "Log in to accounts", hint: "opens Chrome" },
         { value: "automation", label: "Routines and background service" },
+        { value: "mode", label: `Autopilot: ${ctx.config.mode === "autopilot" ? "on" : "off"}`, hint: ctx.config.mode === "autopilot" ? "agents decide and send" : "you approve everything" },
         { value: "brand", label: "Add a brand" },
         { value: "status", label: "Check everything" },
         { value: "exit", label: "Exit" },
@@ -156,6 +158,10 @@ export async function runSetup(ctx: Ctx, p: Prompter, deps: SetupDeps): Promise<
     }
     if (action === "status") {
       await status(ctx, p, deps, tools);
+      continue;
+    }
+    if (action === "mode") {
+      await chooseMode(ctx, p);
       continue;
     }
     const brand = brands.length === 1 ? brands[0] : await p.select({ message: "Which brand?", options: brands.map((b) => ({ value: b, label: getBrand(ctx, b).name, hint: b })) });
@@ -404,11 +410,13 @@ async function automation(ctx: Ctx, p: Prompter, deps: SetupDeps, brand: string,
     editConfig(ctx, (doc) => doc.set("engine", engines[0]));
   }
 
+  await chooseMode(ctx, p);
+
   const base = ctx.config.routines.filter((r) => ROUTINE_HINTS[r.name]);
   const already = ctx.config.routines.filter((r) => r.enabled && r.brand === brand).map((r) => r.name.replace(new RegExp(`-${brand}$`), ""));
   const picked = base.length
     ? await p.multiselect({
-        message: `Routines for ${getBrand(ctx, brand).name}. They only prepare work; nothing goes out until you approve it.`,
+        message: `Routines for ${getBrand(ctx, brand).name}. ${ctx.config.mode === "autopilot" ? "On autopilot they decide and their drafts go out within the limits." : "They only prepare work; nothing goes out until you approve it."}`,
         options: base.map((r) => ({ value: r.name, label: r.name, hint: ROUTINE_HINTS[r.name] })),
         initial: already,
         required: false,
@@ -427,6 +435,59 @@ async function automation(ctx: Ctx, p: Prompter, deps: SetupDeps, brand: string,
   } else if (hasWork) {
     p.note("Keep `mkt daemon` running (tmux, screen or a systemd user service) to send on time and run routines.", "Background");
   }
+}
+
+// ---------------------------------------------------------------- review / autopilot
+
+const KIND_LABELS: Choice<OutboxKind>[] = [
+  { value: "post", label: "Posts", hint: "publishing content" },
+  { value: "reply", label: "Replies", hint: "answering people who wrote to you" },
+  { value: "comment", label: "Comments" },
+  { value: "dm", label: "DMs and WhatsApp", hint: "first messages to leads" },
+  { value: "connect", label: "Connection requests" },
+  { value: "email", label: "Cold email" },
+];
+
+async function chooseMode(ctx: Ctx, p: Prompter): Promise<void> {
+  const mode = await p.select<"review" | "autopilot">({
+    message: "How much should the agents decide on their own?",
+    options: [
+      { value: "review", label: "Review mode", hint: "you approve every post and message in mkt review (best to start)" },
+      { value: "autopilot", label: "Autopilot", hint: "agents decide and send on their own, within the limits; switch back any time" },
+    ],
+    initial: ctx.config.mode,
+  });
+  if (mode === "review") {
+    if (ctx.config.mode === "autopilot") {
+      const r = switchMode(ctx, "review");
+      p.success(`Review mode${r.revoked ? `: ${r.revoked} item(s) autopilot had approved are back in mkt review` : ""}.`);
+    }
+    return;
+  }
+  const kinds = await p.multiselect<OutboxKind>({
+    message: "What can go out without you?",
+    options: KIND_LABELS,
+    initial: ctx.config.mode === "autopilot" ? (ctx.config.autopilot.kinds as OutboxKind[]) : KIND_LABELS.map((k) => k.value),
+    required: true,
+  });
+  const waiting = listOutbox(ctx, undefined, { status: ["pending_approval"] }).filter((i) => !i.hold && kinds.includes(i.kind)).length;
+  const approvePending = waiting ? await p.confirm({ message: `Also approve the ${waiting} item(s) already waiting in mkt review?`, initial: false }) : false;
+  const r = switchMode(ctx, "autopilot", { kinds, approvePending });
+  p.note(
+    [
+      `On autopilot: ${kinds.join(", ")}.`,
+      "Agents make the calls and log them in reports/decisions.md; the background service sends on schedule.",
+      "",
+      "Still enforced, always:",
+      "  do-not-contact list and opt-outs (\"stop\", \"sair\", \"baja\"...)",
+      "  consent: first WhatsApp needs opt-in, cold email needs a recorded basis",
+      "  quiet hours, daily limits and gaps per account",
+      "  anything an agent holds for you (legal, refunds, press, data requests, complaints)",
+      "",
+      `Back to review any time: mkt \u203a Autopilot, or mkt autopilot off${r.approved ? `\nApproved ${r.approved} waiting item(s).` : ""}`,
+    ].join("\n"),
+    "Autopilot is on",
+  );
 }
 
 // ---------------------------------------------------------------- finish

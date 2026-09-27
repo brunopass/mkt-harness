@@ -7,6 +7,8 @@ description: "Evolve a brand from evidence: propose positioning, messaging, voic
 
 Brands drift toward what customers respond to — deliberately, with evidence, and with the founder's sign-off.
 Global rules: [AGENTS.md](../../AGENTS.md). You **propose**; you never silently rewrite positioning, voice or offers.
+In autopilot you may apply voice and messaging changes backed by evidence (status: applied, with the diff kept in the
+changelog and a line in `reports/decisions.md`); positioning, offers and prices stay proposals for a human.
 
 ## Inputs
 - `brand`; the trigger (quarterly review, a new persona emerging, low conversion, a launch, a competitor move);

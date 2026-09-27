@@ -193,7 +193,7 @@ describe("guided setup", () => {
       { q: /In that window, log in to Instagram/, a: "check" },
       { q: /In that window, log in to Instagram/, a: "check" },
       { q: /In that window, scan the QR code/, a: "skip" },
-      { q: /Which agent runs the scheduled work/, a: "codex" },
+      { q: /Which agent runs the scheduled work/, a: "codex" }, { q: /How much should the agents decide/, a: "review" },
       { q: /^Routines for Acme Clinics/, a: ["trend-radar", "inbox-triage"] },
       { q: /Keep mkt running in the background/, a: true },
       { q: /^Start now/, a: "claude" },
@@ -236,7 +236,7 @@ describe("guided setup", () => {
     const ctx = makeRoot();
     await runSetup(ctx, new ScriptedPrompter([
       { q: /^Your business website/, a: "" }, { q: /^Brand name/, a: "Delta" }, { q: /^Short id/, a: "delta" }, { q: /^Languages/, a: ["en"] },
-      { q: /^Timezone/, a: "UTC" }, { q: /^Where does/, a: [] }, { q: /Which agent/, a: "claude" }, { q: /^Routines/, a: [] },
+      { q: /^Timezone/, a: "UTC" }, { q: /^Where does/, a: [] }, { q: /Which agent/, a: "claude" }, { q: /How much should the agents decide/, a: "review" }, { q: /^Routines/, a: [] },
       { q: /Keep mkt running/, a: false }, { q: /^Start now/, a: "done" },
     ]), fakeDeps().deps);
     for (const trusted of [false, true]) {
@@ -251,11 +251,40 @@ describe("guided setup", () => {
     expect(codex.calls).toEqual(['launch codex Use the mkt skill for brand "delta": show where things stand and the next best actions.']);
   });
 
+  it("turns autopilot on and off from the menu", async () => {
+    const ctx = makeRoot();
+    await runSetup(ctx, new ScriptedPrompter([
+      { q: /^Your business website/, a: "" }, { q: /^Brand name/, a: "Echo" }, { q: /^Short id/, a: "echo" }, { q: /^Languages/, a: ["en"] },
+      { q: /^Timezone/, a: "UTC" }, { q: /^Where does/, a: [] }, { q: /Which agent/, a: "claude" }, { q: /How much should the agents decide/, a: "review" },
+      { q: /^Routines/, a: [] }, { q: /Keep mkt running/, a: false }, { q: /^Start now/, a: "done" },
+    ]), fakeDeps().deps);
+    expect(ctx.config.mode).toBe("review");
+
+    const on = new ScriptedPrompter([
+      { q: /What do you want to do/, a: "mode" },
+      { q: /How much should the agents decide/, a: "autopilot" },
+      { q: /What can go out without you/, a: ["post", "reply"] },
+      { q: /What do you want to do/, a: "exit" },
+    ]);
+    await runSetup(ctx, on, fakeDeps().deps);
+    expect(ctx.config).toMatchObject({ mode: "autopilot", autopilot: { kinds: ["post", "reply"] } });
+    expect(on.shown.some((s) => s.includes("Autopilot is on") && s.includes("do-not-contact list"))).toBe(true);
+    expect(JSON.parse(fs.readFileSync(path.join(ctx.root, ".claude", "settings.local.json"), "utf8")).permissions.allow).toContain("mcp__mkt__outbox_dispatch");
+
+    await runSetup(ctx, new ScriptedPrompter([
+      { q: /What do you want to do/, a: "mode" },
+      { q: /How much should the agents decide/, a: "review" },
+      { q: /What do you want to do/, a: "exit" },
+    ]), fakeDeps().deps);
+    expect(ctx.config.mode).toBe("review");
+    expect(fs.existsSync(path.join(ctx.root, ".claude", "settings.local.json"))).toBe(false);
+  });
+
   it("returns to a menu once a brand exists, and exits cleanly", async () => {
     const ctx = makeRoot();
     await runSetup(ctx, new ScriptedPrompter([
       { q: /^Your business website/, a: "" }, { q: /^Brand name/, a: "Beta" }, { q: /^Short id/, a: "beta" }, { q: /^Languages/, a: ["en"] },
-      { q: /^Timezone/, a: "Europe/Madrid" }, { q: /^Where does/, a: [] }, { q: /Which agent/, a: "claude" }, { q: /^Routines/, a: [] },
+      { q: /^Timezone/, a: "Europe/Madrid" }, { q: /^Where does/, a: [] }, { q: /Which agent/, a: "claude" }, { q: /How much should the agents decide/, a: "review" }, { q: /^Routines/, a: [] },
       { q: /Keep mkt running/, a: false }, { q: /^Start now/, a: "done" },
     ]), fakeDeps().deps);
     const p = new ScriptedPrompter([{ q: /What do you want to do/, a: "exit" }]);
@@ -311,7 +340,7 @@ describe("guided setup", () => {
       { q: /^Email address/, a: KEEP },
       { q: /^Research Acme Clínicas in depth now/, a: true },
       { q: /^Log in to 4 accounts now/, a: false },
-      { q: /Which agent runs the scheduled work/, a: "claude" },
+      { q: /Which agent runs the scheduled work/, a: "claude" }, { q: /How much should the agents decide/, a: "review" },
       { q: /^Routines for/, a: [] },
       { q: /Keep mkt running in the background/, a: false },
       { q: /research is still running. Wait for it/, a: "wait" },
