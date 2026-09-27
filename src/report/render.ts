@@ -1,10 +1,10 @@
-import { spawn } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { Marked, type Tokens } from "marked";
 import { getBrand, listBrands } from "../core/brands.js";
 import type { Ctx } from "../core/config.js";
+import { openExternal } from "../core/os.js";
 import { MktError, writeFileAtomic } from "../core/store.js";
 
 /**
@@ -142,15 +142,7 @@ export function writeReport(ctx: Ctx, file: string): { html: string; title: stri
   return { html: out, title, url: `file://${out}` };
 }
 
-/** Open a local file in the default browser. MKT_NO_OPEN=1 (tests, headless) only renders. */
+/** Open a local file in the default browser (see openExternal). */
 export function openInBrowser(target: string): boolean {
-  if (process.env.MKT_NO_OPEN === "1" || process.env.MKT_MCP_PROFILE === "headless") return false;
-  const cmd = process.platform === "darwin" ? "open" : process.platform === "win32" ? "cmd" : "xdg-open";
-  const args = process.platform === "win32" ? ["/c", "start", "", target] : [target];
-  try {
-    spawn(cmd, args, { detached: true, stdio: "ignore" }).unref();
-    return true;
-  } catch {
-    return false;
-  }
+  return openExternal(target);
 }

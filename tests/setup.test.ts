@@ -92,7 +92,7 @@ function fakeDeps(over: Partial<SetupDeps> = {}) {
   let loginChecks = 0;
   let polls = 0;
   const deps: SetupDeps = {
-    detectTools: () => ({ checks: [{ name: "Node.js", ok: true, detail: "22" }, { name: "Google Chrome", ok: true, detail: "/chrome" }], engines: ["claude", "codex"] }),
+    detectTools: () => ({ checks: [{ name: "Node.js", ok: true, detail: "22" }, { name: "Google Chrome", ok: true, detail: "/chrome" }], engines: ["claude", "codex"], surfaces: ["claude", "codex"] }),
     openForLogin: async (_c, id) => void calls.push(`open ${id}`),
     checkLogin: async (_c, id) => {
       calls.push(`check ${id}`);
@@ -241,13 +241,13 @@ describe("guided setup", () => {
     ]), fakeDeps().deps);
     for (const trusted of [false, true]) {
       const { deps, calls } = fakeDeps({ claudeTrusted: () => trusted });
-      const p = new ScriptedPrompter([{ q: /What do you want to do/, a: "open" }, { q: /Open which agent/, a: "claude" }]);
+      const p = new ScriptedPrompter([{ q: /What do you want to do/, a: "open" }, { q: /Open where/, a: "claude" }]);
       await runSetup(ctx, p, deps);
       expect(calls).toEqual(["launch claude /mkt delta"]);
       expect(p.shown.some((s) => s.includes("trust this folder")), `trusted=${trusted}`).toBe(!trusted);
     }
     const codex = fakeDeps();
-    await runSetup(ctx, new ScriptedPrompter([{ q: /What do you want to do/, a: "open" }, { q: /Open which agent/, a: "codex" }]), codex.deps);
+    await runSetup(ctx, new ScriptedPrompter([{ q: /What do you want to do/, a: "open" }, { q: /Open where/, a: "codex" }]), codex.deps);
     expect(codex.calls).toEqual(['launch codex Use the mkt skill for brand "delta": show where things stand and the next best actions.']);
   });
 
@@ -278,6 +278,32 @@ describe("guided setup", () => {
     ]), fakeDeps().deps);
     expect(ctx.config.mode).toBe("review");
     expect(fs.existsSync(path.join(ctx.root, ".claude", "settings.local.json"))).toBe(false);
+  });
+
+  it("opens the desktop apps: remembers the choice, explains what happens in each app", async () => {
+    const ctx = makeRoot();
+    const withApps = () => fakeDeps({ detectTools: () => ({ checks: [], engines: ["claude", "codex"], surfaces: ["claude", "claude-desktop", "codex", "codex-desktop"] }) });
+    await runSetup(ctx, new ScriptedPrompter([
+      { q: /^Your business website/, a: "" }, { q: /^Brand name/, a: "Foxtrot" }, { q: /^Short id/, a: "fox" }, { q: /^Languages/, a: ["en"] },
+      { q: /^Timezone/, a: "UTC" }, { q: /^Where does/, a: [] }, { q: /Which agent/, a: "claude" }, { q: /How much should the agents decide/, a: "review" },
+      { q: /^Routines/, a: [] }, { q: /Keep mkt running/, a: false }, { q: /^Start now/, a: "claude-desktop" },
+    ]), withApps().deps).then(() => undefined);
+    expect(ctx.config.open).toBe("claude-desktop");
+
+    const a = withApps();
+    const p = new ScriptedPrompter([{ q: /What do you want to do/, a: "open" }, { q: /Open where/, a: "codex-desktop" }]);
+    await runSetup(ctx, p, a.deps);
+    expect(p.asked[0]).toMatch(/What do you want to do/);
+    expect(p.initials.get("Open where?")).toBe("claude-desktop"); // remembered
+    expect(a.calls).toEqual(['launch codex-desktop Use the mkt skill for brand "fox": show where things stand and the next best actions.']);
+    expect(p.shown.some((s) => s.includes("In the Codex app") && s.includes("clipboard"))).toBe(true);
+    expect(ctx.config.open).toBe("codex-desktop");
+
+    const b = withApps();
+    const p2 = new ScriptedPrompter([{ q: /What do you want to do/, a: "open" }, { q: /Open where/, a: "claude-desktop" }]);
+    await runSetup(ctx, p2, b.deps);
+    expect(b.calls).toEqual(["launch claude-desktop /mkt fox"]);
+    expect(p2.shown.some((s) => s.includes("In the Claude app") && s.includes("confirm the folder"))).toBe(true);
   });
 
   it("returns to a menu once a brand exists, and exits cleanly", async () => {
@@ -452,5 +478,53 @@ describe("agent hand-off", () => {
     });
     expect(r2.status, r2.stderr).toBe(0);
     expect(fs.readFileSync(`${out}.args`, "utf8").split("\0").filter(Boolean)).toEqual(["/mkt"]);
+  });
+});
+
+describe("desktop apps", () => {
+  it("builds deep links that a message or folder can't tamper with", async () => {
+    const { desktopUrl } = await import("../src/setup/deps.js");
+    const folder = "/Users/ana/Meu Projeto & Co/#1 – ação";
+    const message = "/mkt acme&folder=/etc&q=evil#frag %0A $(rm -rf ~)";
+    const u = new URL(desktopUrl("claude-desktop", folder, message));
+    expect(`${u.protocol}//${u.host}${u.pathname}`).toBe("claude://code/new");
+    expect(u.searchParams.getAll("folder")).toEqual([folder]);
+    expect(u.searchParams.getAll("q")).toEqual([message]);
+    expect([...u.searchParams.keys()].sort()).toEqual(["folder", "q"]);
+    expect(u.hash).toBe("");
+    expect(new URL(desktopUrl("claude-desktop", folder, "x".repeat(9000))).searchParams.get("q")).toHaveLength(5000);
+    const c = new URL(desktopUrl("codex-desktop", folder, message));
+    expect(`${c.protocol}//${c.host}`).toBe("codex://new");
+    expect([...c.searchParams.entries()]).toEqual([["path", folder]]); // Codex links carry no message
+  });
+
+  it("mkt open claude-desktop / desktop / codex-desktop through the real CLI", () => {
+    const apps = fs.mkdtempSync(path.join(os.tmpdir(), "mkt-apps-"));
+    const run = (args: string[], extra: Record<string, string> = {}) =>
+      spawnSync(path.join(ROOT, "bin", "mkt"), ["open", ...args], {
+        env: { ...process.env, MKT_NO_OPEN: "1", MKT_APPS_DIR: apps, MKT_WORKSPACE: path.join(apps, "ws"), ...extra },
+        encoding: "utf8",
+        timeout: 60_000,
+      });
+    const missing = run(["claude-desktop"]);
+    expect(missing.status).toBe(1);
+    expect(missing.stderr).toMatch(/isn't installed/);
+
+    fs.mkdirSync(path.join(apps, "Claude.app"));
+    fs.mkdirSync(path.join(apps, "Codex.app"));
+    const r = run(["claude-desktop", "review", "$(touch PWNED)", "&q=evil"]);
+    expect(r.status, r.stderr).toBe(0);
+    const url = new URL(r.stdout.trim().split("\n").at(-1)!);
+    expect(url.searchParams.getAll("folder")).toEqual([fs.realpathSync(ROOT)]);
+    expect(url.searchParams.getAll("q")).toEqual(["review $(touch PWNED) &q=evil"]);
+    expect(fs.existsSync(path.join(ROOT, "PWNED"))).toBe(false);
+
+    const home = new URL(run(["desktop"]).stdout.trim().split("\n").at(-1)!); // default engine's app, home screen
+    expect(home.protocol).toBe("claude:");
+    expect(home.searchParams.get("q")).toBe("/mkt");
+
+    const codex = run(["codex-desktop", "hello"]);
+    expect(codex.stdout).toContain("First message: hello");
+    expect(new URL(codex.stdout.trim().split("\n").at(-1)!).protocol).toBe("codex:");
   });
 });

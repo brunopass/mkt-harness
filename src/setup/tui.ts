@@ -4,7 +4,7 @@ import { loadConfig, type Ctx } from "../core/config.js";
 import { Account, type OutboxKind, type Platform } from "../core/schemas.js";
 import { slugify, truncate } from "../core/store.js";
 import { applyProfile, describeProfile, normalizeUrl, saveProfile, type SiteProfile } from "../research/site.js";
-import { editConfig, enableRoutines, envName, initWorkspace, MAIL_PROVIDERS, switchMode, upsertEnv, withAuth, type MailProvider, type ToolCheck } from "./helpers.js";
+import { editConfig, enableRoutines, engineOf, envName, initWorkspace, MAIL_PROVIDERS, switchMode, upsertEnv, withAuth, type MailProvider, type Surface, type ToolCheck } from "./helpers.js";
 import { listOutbox } from "../core/outbox.js";
 import type { Choice, Prompter } from "./prompter.js";
 
@@ -12,13 +12,14 @@ type Engine = "claude" | "codex";
 
 /** Side effects the flow needs; the CLI passes the real ones, tests pass fakes. */
 export interface SetupDeps {
-  detectTools(ctx: Ctx): { checks: ToolCheck[]; engines: Engine[] };
+  detectTools(ctx: Ctx): { checks: ToolCheck[]; engines: Engine[]; surfaces: Surface[] };
   openForLogin(ctx: Ctx, accountId: string): Promise<void>;
   checkLogin(ctx: Ctx, accountId: string): Promise<boolean>;
   closeBrowser(ctx: Ctx, accountId: string): Promise<void>;
   verifySmtp(url: string): Promise<void>;
   installDaemon(ctx: Ctx): Promise<string>;
-  launchAgent(ctx: Ctx, engine: Engine, prompt: string): Promise<void>;
+  /** open the agent in its terminal CLI or desktop app; desktop launches report the link and clipboard use */
+  launchAgent(ctx: Ctx, surface: Surface, prompt: string): Promise<{ url?: string; copied?: boolean; opened?: boolean } | void>;
   scanSite(ctx: Ctx, url: string): Promise<SiteProfile>;
   /** start the deep research as a detached background run */
   startResearch(ctx: Ctx, brand: string, engine: Engine, prompt: string): Promise<ResearchRun>;
@@ -39,6 +40,17 @@ export interface ResearchRun {
 }
 
 const ENGINE_LABEL: Record<Engine, string> = { claude: "Claude Code", codex: "Codex" };
+export const SURFACE_LABEL: Record<Surface, string> = {
+  claude: "Claude Code in the terminal",
+  "claude-desktop": "the Claude desktop app",
+  codex: "Codex in the terminal",
+  "codex-desktop": "the Codex app",
+};
+
+/** The surface to offer first: the remembered one if it's still available, else the first available. */
+function preferredSurface(ctx: Ctx, surfaces: Surface[]): Surface | undefined {
+  return ctx.config.open && surfaces.includes(ctx.config.open) ? ctx.config.open : surfaces[0];
+}
 
 /** The first message when the agent opens: the home screen (state + next actions) unless a specific task is better. */
 export function homePrompt(engine: Engine, brand?: string): string {
@@ -128,7 +140,7 @@ export async function runSetup(ctx: Ctx, p: Prompter, deps: SetupDeps): Promise<
     const run = await research(ctx, p, deps, brand, tools.engines, website, profile);
     await logIn(ctx, p, deps, brand, false);
     await automation(ctx, p, deps, brand, tools.engines);
-    await finish(ctx, p, deps, brand, tools.engines, false, run);
+    await finish(ctx, p, deps, brand, tools.surfaces, false, run);
     return;
   }
 
@@ -137,7 +149,7 @@ export async function runSetup(ctx: Ctx, p: Prompter, deps: SetupDeps): Promise<
     const action = await p.select({
       message: "What do you want to do?",
       options: [
-        ...(tools.engines.length ? [{ value: "open", label: `Open ${tools.engines[0] === "claude" ? "Claude Code" : "Codex"}`, hint: brands.join(", ") }] : []),
+        ...(tools.surfaces.length ? [{ value: "open", label: `Open ${SURFACE_LABEL[preferredSurface(ctx, tools.surfaces)!]}`, hint: brands.join(", ") }] : []),
         { value: "accounts", label: "Add accounts" },
         { value: "login", label: "Log in to accounts", hint: "opens Chrome" },
         { value: "automation", label: "Routines and background service" },
@@ -165,7 +177,7 @@ export async function runSetup(ctx: Ctx, p: Prompter, deps: SetupDeps): Promise<
       continue;
     }
     const brand = brands.length === 1 ? brands[0] : await p.select({ message: "Which brand?", options: brands.map((b) => ({ value: b, label: getBrand(ctx, b).name, hint: b })) });
-    if (action === "open") return finish(ctx, p, deps, brand, tools.engines, true);
+    if (action === "open") return finish(ctx, p, deps, brand, tools.surfaces, true);
     if (action === "accounts") await addAccounts(ctx, p, deps, brand);
     if (action === "login") await logIn(ctx, p, deps, brand, true);
     if (action === "automation") await automation(ctx, p, deps, brand, tools.engines);
@@ -492,7 +504,7 @@ async function chooseMode(ctx: Ctx, p: Prompter): Promise<void> {
 
 // ---------------------------------------------------------------- finish
 
-async function finish(ctx: Ctx, p: Prompter, deps: SetupDeps, brand: string, engines: Engine[], fromMenu = false, run?: ResearchRun): Promise<void> {
+async function finish(ctx: Ctx, p: Prompter, deps: SetupDeps, brand: string, surfaces: Surface[], fromMenu = false, run?: ResearchRun): Promise<void> {
   if (run && deps.isRunning(run)) {
     const wait = await p.select({
       message: "The research is still running. Wait for it?",
@@ -542,31 +554,43 @@ async function finish(ctx: Ctx, p: Prompter, deps: SetupDeps, brand: string, eng
     : `Use the brand-foundation skill for brand "${brand}": ask me what you need to know.`;
   // after research (or from the menu) the home screen shows what exists and what's next; a brand-new brand starts
   // straight on its foundation
-  const promptFor = (e: Engine) => (fromMenu || run ? homePrompt(e, brand) : e === "claude" ? `/brand-foundation ${brand}` : task);
-  const choice = engines.length
-    ? await p.select<Engine | "done">({
-        message: fromMenu ? "Open which agent?" : "Start now?",
+  const promptFor = (s: Surface) => {
+    const e = engineOf(s);
+    return fromMenu || run ? homePrompt(e, brand) : e === "claude" ? `/brand-foundation ${brand}` : task;
+  };
+  const first = preferredSurface(ctx, surfaces);
+  const ordered = first ? [first, ...surfaces.filter((s) => s !== first)] : [];
+  const choice = ordered.length
+    ? await p.select<Surface | "done">({
+        message: fromMenu ? "Open where?" : "Start now?",
         options: [
-          ...engines.map((e) => ({
-            value: e,
-            label: fromMenu ? ENGINE_LABEL[e] : run ? `Open ${ENGINE_LABEL[e]} to review the research and answer its questions` : `Open ${ENGINE_LABEL[e]} and build the brand foundation`,
+          ...ordered.map((s) => ({
+            value: s,
+            label: fromMenu ? `In ${SURFACE_LABEL[s]}` : run ? `Review the research in ${SURFACE_LABEL[s]}` : `Build the brand foundation in ${SURFACE_LABEL[s]}`,
             hint: fromMenu ? undefined : run ? "it walks you through what it found and what it couldn't" : "it reads your website and asks you a few questions",
           })),
           { value: "done" as const, label: fromMenu ? "Back" : "Finish" },
         ],
+        initial: first,
       })
     : "done";
   if (choice === "done") {
     if (!fromMenu) p.outro("All set. Run mkt any time to change something.");
     return;
   }
+  if (choice !== ctx.config.open) editConfig(ctx, (doc) => doc.set("open", choice)); // remembered for next time and `mkt open`
+  const prompt = promptFor(choice);
   if (choice === "claude" && !deps.claudeTrusted(ctx))
     p.note(
       `Claude Code will ask whether you trust this folder. Choose "Yes, I trust this folder":\nthe harness's tools and permissions only switch on after that.`,
       "First time in this folder",
     );
-  p.outro(`Opening ${ENGINE_LABEL[choice]}…`);
-  await deps.launchAgent(ctx, choice, promptFor(choice));
+  if (choice === "claude-desktop")
+    p.note(`The Claude app asks you to confirm the folder, then shows "${prompt}" ready in the message box: press Enter to start.`, "In the Claude app");
+  if (choice === "codex-desktop")
+    p.note(`The Codex app opens a new thread on this folder. The first message is on your clipboard:\npaste it (⌘V) and send.\n\n${prompt}`, "In the Codex app");
+  p.outro(`Opening ${SURFACE_LABEL[choice]}…`);
+  await deps.launchAgent(ctx, choice, prompt);
 }
 
 // ---------------------------------------------------------------- status

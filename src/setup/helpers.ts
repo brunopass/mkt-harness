@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import YAML from "yaml";
 import { chromePath } from "../browser/chrome.js";
@@ -55,7 +56,22 @@ export function versionOf(bin: string): { ok: boolean; detail: string } {
   return { ok: false, detail: r.signal ? `crashed on launch (${r.signal}): reinstall it` : `exit ${r.status}` };
 }
 
-export function detectTools(ctx: Ctx): { checks: ToolCheck[]; engines: ("claude" | "codex")[] } {
+/** Where an agent can be opened: its terminal CLI or its desktop app. */
+export type Surface = "claude" | "claude-desktop" | "codex" | "codex-desktop";
+export const SURFACES: readonly Surface[] = ["claude", "claude-desktop", "codex", "codex-desktop"];
+export const engineOf = (s: Surface): "claude" | "codex" => (s.startsWith("claude") ? "claude" : "codex");
+
+/** A macOS app bundle in /Applications or ~/Applications. Desktop apps are optional; other OSes report none. */
+export function findApp(name: string): string | undefined {
+  if (process.env.MKT_APPS_DIR) {
+    const p = path.join(process.env.MKT_APPS_DIR, `${name}.app`);
+    return fs.existsSync(p) ? p : undefined;
+  }
+  if (process.platform !== "darwin") return undefined;
+  return [path.join("/Applications", `${name}.app`), path.join(os.homedir(), "Applications", `${name}.app`)].find((p) => fs.existsSync(p));
+}
+
+export function detectTools(ctx: Ctx): { checks: ToolCheck[]; engines: ("claude" | "codex")[]; surfaces: Surface[] } {
   const major = +process.versions.node.split(".")[0];
   const checks: ToolCheck[] = [{ name: "Node.js", ok: major >= 22, detail: process.versions.node }];
   try {
@@ -66,8 +82,20 @@ export function detectTools(ctx: Ctx): { checks: ToolCheck[]; engines: ("claude"
   const claude = versionOf(ctx.config.runner.claude.bin);
   const codex = versionOf(ctx.config.runner.codex.bin);
   checks.push({ name: "Claude Code", ...claude }, { name: "Codex", ...codex });
+  const claudeApp = findApp("Claude");
+  const codexApp = findApp("Codex");
+  checks.push(
+    { name: "Claude app", ok: !!claudeApp, detail: claudeApp ?? "not installed (optional)" },
+    { name: "Codex app", ok: !!codexApp, detail: codexApp ?? "not installed (optional)" },
+  );
   const engines = [...(claude.ok ? ["claude" as const] : []), ...(codex.ok ? ["codex" as const] : [])];
-  return { checks, engines };
+  const surfaces: Surface[] = [
+    ...(claude.ok ? ["claude" as const] : []),
+    ...(claudeApp ? ["claude-desktop" as const] : []),
+    ...(codex.ok ? ["codex" as const] : []),
+    ...(codexApp ? ["codex-desktop" as const] : []),
+  ];
+  return { checks, engines, surfaces };
 }
 
 // ---------------------------------------------------------------- .env

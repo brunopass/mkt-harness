@@ -190,7 +190,7 @@ Start with your website. The setup reads it in a headless Chrome (name, descript
 └  Opening Claude Code…
 ```
 
-Run `mkt` again any time to add accounts, log in again, change routines, check everything or open the agent (`mkt open` goes straight there). Already cloned the repo? `./bin/mkt` opens the same setup.
+Run `mkt` again any time to add accounts, log in again, change routines, check everything or open the agent (`mkt open` goes straight there). The agent opens where you like to work: **Claude Code or Codex in the terminal, or their desktop apps**. The setup offers whatever is installed and remembers your choice; the Claude app opens a new Claude Code session on this folder with the first message ready, the Codex app opens a thread on it with the first message on your clipboard. Already cloned the repo? `./bin/mkt` opens the same setup.
 
 Needs git, Node 22.12+ (the installer uses nvm if you have it), Google Chrome, and Claude Code or Codex. Passwords and tokens go to a private `.env` on your computer, never into the brand files.
 
@@ -319,7 +319,8 @@ mkt daemon install --load                    # macOS launchd: sends due items, s
 
 ```text
 mkt                             (no arguments) guided setup and menu, same as mkt setup
-mkt open [claude|codex] [first message...]      open the agent in the harness folder
+mkt open [claude|codex|claude-desktop|codex-desktop|desktop] [first message...]
+                                open the agent on the harness folder (default: your last choice)
 mkt init | doctor | mcp
 mkt brand new <slug> --name <name> | list | show <slug> | scan <url> [--brand <slug>] [--json]
 mkt account add <brand> <platform> <handle> [--id --transport --inbox --from --smtp-env --imap-env] | list
@@ -395,7 +396,7 @@ What the tests cover, including the adversarial cases:
 | MCP server | the real server over stdio, headless tool profile | agents calling `outbox_approve`, unknown accounts |
 | Site scanner | identity, languages, socials across pages, contacts, colours and fonts | spoofed social links (`instagram.com.evil.com`, `javascript:`), prompt injection that tries to break out of the snapshot's quoting, 3 000-deep and 20 000-item JSON-LD, hanging and failing pages, redirects off-site, `localhost` / private / cloud-metadata addresses, YAML-shaped values, control and bidi characters |
 | Setup TUI | the whole first run with scripted answers, the menu, pre-fill from a domain, background research | invalid answers, SMTP failures, a site that can't be read, `.env` values with `$( )`, mixed quotes and line breaks (checked with Node's own loader) |
-| Agent hand-off | `mkt open` through the real shell script | arguments with `$( )`, backticks, `;`, `*`, `-rf`: passed literally, nothing executed, no Node parent left behind |
+| Agent hand-off | `mkt open` through the real shell script; desktop apps via `claude://code/new` and `codex://new` links, remembered choice | arguments with `$( )`, backticks, `;`, `*`, `-rf`: passed literally, nothing executed, no Node parent left behind; a message or folder containing `&folder=`, `&q=`, `#`, spaces or accents can't add or change link parameters; the terminal gets the real tty device |
 | Browser | snapshot refs, dry run vs real send against a fake social site, adapter failure screenshots, renderer | |
 | Autopilot | drafts approved as autopilot, kinds respected, re-approval after edits, switching on and off (pending items, config, local Claude permissions) | held items can't be released by an agent (or sent if forged), suppression after approval, opt-out replies cancel what autopilot queued, consent, quiet hours, touch and rate limits, replies to people who never wrote |
 | Reports | Markdown to a brand-styled page next to the file, frontmatter stripped, tables, images, diagrams drawn (real Chrome) | `<script>`, `onerror`, `<iframe>`, `javascript:` (any case, with tabs), `data:`, `vbscript:`, `file:` and protocol-relative links, diagram labels with HTML, symlinks and paths out of the workspace; the page is opened in Chrome and nothing runs |

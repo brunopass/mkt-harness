@@ -26,6 +26,8 @@ export const Config = z.object({
   workspace: z.string().default("./workspace"),
   timezone: z.string().default("UTC"),
   engine: z.enum(["claude", "codex"]).default("claude"),
+  /** where `mkt open` and the setup open the agent by default (remembered from the last choice) */
+  open: z.enum(["claude", "claude-desktop", "codex", "codex-desktop"]).optional(),
   /**
    * review: a human approves everything that reaches a person (mkt review). autopilot: the harness approves the kinds in
    * autopilot.kinds when they're drafted and agents decide without asking; policy checks and holds still apply.

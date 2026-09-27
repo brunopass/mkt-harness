@@ -23,9 +23,9 @@ import { syncAccount, syncAll } from "./inbox/sync.js";
 import { startMcp } from "./mcp/server.js";
 import { scanSite, describeProfile, saveProfile } from "./research/site.js";
 import { checkLogin, claudeTrusted, launchAgent, realDeps } from "./setup/deps.js";
-import { initWorkspace, switchMode } from "./setup/helpers.js";
+import { engineOf, findApp, initWorkspace, SURFACES, switchMode, type Surface } from "./setup/helpers.js";
 import { Cancelled, clackPrompter } from "./setup/prompter.js";
-import { homePrompt, runSetup } from "./setup/tui.js";
+import { homePrompt, runSetup, SURFACE_LABEL } from "./setup/tui.js";
 import { renderContent } from "./render/carousel.js";
 import { openInBrowser, writeReport } from "./report/render.js";
 import { buildCommand, runAgent } from "./runner/agent.js";
@@ -79,22 +79,33 @@ program
     out(`\nnext: mkt setup   (or: mkt brand new <slug> --name "<Brand>")`);
   });
 
-/** `mkt open [claude|codex] [words...]`: everything after the engine is the first message, taken literally. */
+/**
+ * `mkt open [claude|codex|claude-desktop|codex-desktop|desktop] [words...]`: everything after the target is the first
+ * message, taken literally. No target: the remembered choice (config `open`), else the default engine in the terminal.
+ */
 async function openAgent(args: string[]): Promise<never> {
   const x = ctx();
-  const known = args[0] === "claude" || args[0] === "codex";
-  const engine = known ? (args[0] as "claude" | "codex") : x.config.engine;
-  const words = known ? args.slice(1) : args;
-  if (engine === "claude" && !claudeTrusted(x))
-    process.stderr.write('First time here: when Claude Code asks whether you trust this folder, choose "Yes, I trust this folder".\n');
+  const fallback: Surface = x.config.open ?? x.config.engine;
+  let surface: Surface = fallback;
+  let words = args;
+  if ((SURFACES as readonly string[]).includes(args[0])) (surface = args[0] as Surface), (words = args.slice(1));
+  else if (args[0] === "desktop") (surface = `${engineOf(fallback)}-desktop` as Surface), (words = args.slice(1));
   // no message: start on the home screen (brand status and next actions)
-  await launchAgent(x, engine, words.length ? words.join(" ") : homePrompt(engine));
+  const prompt = words.length ? words.join(" ") : homePrompt(engineOf(surface));
+  if (surface === "claude" && !claudeTrusted(x))
+    process.stderr.write('First time here: when Claude Code asks whether you trust this folder, choose "Yes, I trust this folder".\n');
+  if (surface.endsWith("-desktop") && !findApp(surface === "claude-desktop" ? "Claude" : "Codex"))
+    throw new MktError(`${SURFACE_LABEL[surface]} isn't installed; use: mkt open ${engineOf(surface)}`);
+  const r = await launchAgent(x, surface, prompt);
+  if (surface === "claude-desktop") out(`Opening ${SURFACE_LABEL[surface]}: confirm the folder, then press Enter to send "${prompt}".`);
+  if (surface === "codex-desktop") out(`Opening ${SURFACE_LABEL[surface]}.${r.copied ? " The first message is on your clipboard: paste it (⌘V) and send." : ` First message: ${prompt}`}`);
+  if (r.url && !r.opened) out(r.url); // MKT_NO_OPEN, or no system handler
   process.exit(0);
 }
 
 program
-  .command("open [engine] [prompt...]")
-  .description("open Claude Code (or codex) in the harness folder, optionally with a first message")
+  .command("open [target] [prompt...]")
+  .description("open the agent on the harness folder: claude | codex | claude-desktop | codex-desktop | desktop (default: your last choice)")
   .helpOption(false)
   .action(async () => {
     await openAgent(process.argv.slice(3)); // handled before parsing; kept here for --help
@@ -136,6 +147,10 @@ program
     for (const bin of [x.config.runner.claude.bin, x.config.runner.codex.bin]) {
       const r = spawnSync(bin, ["--version"], { encoding: "utf8", timeout: 15_000 });
       check(r.status === 0, bin, r.status === 0 ? r.stdout.trim().split("\n")[0] : r.error?.message ?? `exit ${r.status ?? r.signal}`);
+    }
+    for (const app of ["Claude", "Codex"]) {
+      const found = findApp(app);
+      out(`${found ? c.green("ok  ") : c.dim("--  ")} ${app} desktop app${c.dim("  " + (found ?? "not installed (optional): mkt open uses the terminal"))}`);
     }
     const brands = listBrands(x);
     check(brands.length > 0, "brands", brands.join(", ") || "none: mkt brand new <slug>");
