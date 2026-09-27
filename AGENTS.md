@@ -59,6 +59,8 @@ insights, trends, content frontmatter) only through the MCP tools: they validate
 
 ## How to work
 
+- A session opened without a task starts with the `mkt` skill (`/mkt <brand>`): show the brand's state and the next best
+  actions, then do the one the human picks.
 - Start any writing task with `brand_context {brand, persona}`. Write natively in each language the brand uses
   (`brand.yaml languages`): pt-BR, es, en are different pieces, not translations.
 - Pick the skill for the job (they are in `skills/`, also available as `/<skill>` in Claude Code):

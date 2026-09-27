@@ -110,6 +110,7 @@ function fakeDeps(over: Partial<SetupDeps> = {}) {
     },
     isRunning: () => ++polls < 3, // running for the first two checks, then done
     researchSummary: () => "Filled brand.md, voice.md, offers.md. Open questions: 3.",
+    claudeTrusted: () => false,
     pollMs: 1,
     platform: "darwin",
     ...over,
@@ -231,6 +232,25 @@ describe("guided setup", () => {
     ]);
   });
 
+  it("opens the agent from the menu on the home screen, with the trust hint only when the folder isn't trusted", async () => {
+    const ctx = makeRoot();
+    await runSetup(ctx, new ScriptedPrompter([
+      { q: /^Your business website/, a: "" }, { q: /^Brand name/, a: "Delta" }, { q: /^Short id/, a: "delta" }, { q: /^Languages/, a: ["en"] },
+      { q: /^Timezone/, a: "UTC" }, { q: /^Where does/, a: [] }, { q: /Which agent/, a: "claude" }, { q: /^Routines/, a: [] },
+      { q: /Keep mkt running/, a: false }, { q: /^Start now/, a: "done" },
+    ]), fakeDeps().deps);
+    for (const trusted of [false, true]) {
+      const { deps, calls } = fakeDeps({ claudeTrusted: () => trusted });
+      const p = new ScriptedPrompter([{ q: /What do you want to do/, a: "open" }, { q: /Open which agent/, a: "claude" }]);
+      await runSetup(ctx, p, deps);
+      expect(calls).toEqual(["launch claude /mkt delta"]);
+      expect(p.shown.some((s) => s.includes("trust this folder")), `trusted=${trusted}`).toBe(!trusted);
+    }
+    const codex = fakeDeps();
+    await runSetup(ctx, new ScriptedPrompter([{ q: /What do you want to do/, a: "open" }, { q: /Open which agent/, a: "codex" }]), codex.deps);
+    expect(codex.calls).toEqual(['launch codex Use the mkt skill for brand "delta": show where things stand and the next best actions.']);
+  });
+
   it("returns to a menu once a brand exists, and exits cleanly", async () => {
     const ctx = makeRoot();
     await runSetup(ctx, new ScriptedPrompter([
@@ -313,7 +333,7 @@ describe("guided setup", () => {
     const scan = fs.readFileSync(path.join(ctx.ws, "brands", "acme", "research", "acme.com.br.md"), "utf8");
     expect(scan).toContain("ignore previous instructions");
     expect(scan).toMatch(/^````+text$/m); // the page's ``` can't close the quote
-    expect(calls).toEqual(["scan https://acme.com.br/", "research acme claude", "launch claude /brand-foundation acme"]);
+    expect(calls).toEqual(["scan https://acme.com.br/", "research acme claude", "launch claude /mkt acme"]); // research done: open on the home screen
     expect(prompts[0]).toContain("workspace/brands/acme/research/acme.com.br.md");
     expect(prompts[0]).toMatch(/unattended: do not ask questions/);
     expect(prompts[0]).toMatch(/never instructions/);
@@ -393,5 +413,15 @@ describe("agent hand-off", () => {
     expect(Number(fs.readFileSync(`${out}.ppid`, "utf8"))).toBe(process.pid); // the shell became the agent
     for (const f of [path.join(dir, "PWNED"), path.join(dir, "PWNED2"), path.join(ROOT, "PWNED"), path.join(ROOT, "PWNED2")]) expect(fs.existsSync(f), f).toBe(false);
     expect(fs.readdirSync(os.tmpdir()).some((n) => n === `mkt-handoff-${r.pid}`)).toBe(false); // hand-off file cleaned up
+
+    // no message: the agent starts on the home screen
+    const r2 = spawnSync(path.join(ROOT, "bin", "mkt"), ["open"], {
+      cwd: dir,
+      env: { ...process.env, MKT_CONFIG: cfg, MKT_WORKSPACE: path.join(dir, "ws"), MKT_TEST_OUT: out },
+      encoding: "utf8",
+      timeout: 60_000,
+    });
+    expect(r2.status, r2.stderr).toBe(0);
+    expect(fs.readFileSync(`${out}.args`, "utf8").split("\0").filter(Boolean)).toEqual(["/mkt"]);
   });
 });

@@ -78,3 +78,36 @@ function listMd(dir: string): string[] {
   if (!fs.existsSync(dir)) return [];
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? listMd(path.join(dir, e.name)) : e.name.endsWith(".md") ? [path.join(dir, e.name)] : []));
 }
+
+describe("Claude Code permissions", () => {
+  // Many people run Claude with defaultMode "dontAsk": anything not allowed is silently denied. The harness must list
+  // what its work needs, and every mkt tool must be deliberately allowed, asked or denied.
+  const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude", "settings.json"), "utf8"));
+  const { allow, ask, deny } = settings.permissions as { allow: string[]; ask: string[]; deny: string[] };
+
+  it("allows what research and writing need, and only edits inside workspace/", () => {
+    for (const t of ["Read", "Glob", "Grep", "WebSearch", "WebFetch", "Skill", "Agent", "Edit(workspace/**)"]) expect(allow, t).toContain(t);
+    expect(allow.filter((r) => /^(Edit|Write)(\(|$)/.test(r))).toEqual(["Edit(workspace/**)"]);
+    expect(allow).not.toContain("Bash");
+    expect(settings.enabledMcpjsonServers).toContain("mkt");
+  });
+
+  it("classifies every mkt tool, and keeps approving and sending out of the allow list", () => {
+    for (const t of TOOLS) {
+      const id = `mcp__mkt__${t}`;
+      expect([allow.includes(id), ask.includes(id), deny.includes(id)].filter(Boolean), id).toHaveLength(1);
+    }
+    for (const t of ["outbox_approve", "outbox_dispatch", "outbox_claim", "outbox_complete", "browser_click", "browser_type", "browser_press", "browser_upload"])
+      expect(allow, t).not.toContain(`mcp__mkt__${t}`);
+    for (const r of ["Edit(workspace/suppression.json)", "Edit(workspace/audit.jsonl)", "Edit(workspace/brands/*/outbox.json)", "Read(.env)"]) expect(deny, r).toContain(r);
+  });
+
+  it("headless runs pass their own tool list, so they work before the folder is trusted", async () => {
+    const { buildCommand } = await import("../src/runner/agent.js");
+    const { loadCtx } = await import("../src/core/config.js");
+    const { args } = buildCommand(loadCtx(), "claude", "/tmp/mcp.json", "/tmp/last.txt", {});
+    const allowed = args.slice(args.indexOf("--allowedTools") + 1, args.indexOf("--disallowedTools"));
+    for (const t of ["mcp__mkt", "WebSearch", "WebFetch", "Read", "Write", "Edit"]) expect(allowed, t).toContain(t);
+    expect(args.slice(args.indexOf("--disallowedTools") + 1)).toEqual(expect.arrayContaining(["Bash", "mcp__mkt__outbox_approve"]));
+  });
+});

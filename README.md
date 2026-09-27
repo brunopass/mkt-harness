@@ -6,7 +6,7 @@
   <a href="#quick-start"><img alt="Node 22.12+" src="https://img.shields.io/badge/node-22.12%2B-16161A?logo=nodedotjs&logoColor=white"></a>
   <a href="src/"><img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-16161A?logo=typescript&logoColor=white"></a>
   <a href="src/mcp/server.ts"><img alt="49 MCP tools" src="https://img.shields.io/badge/MCP-49%20tools-E6007E"></a>
-  <a href="#skills"><img alt="16 skills" src="https://img.shields.io/badge/skills-16-E6007E"></a>
+  <a href="#skills"><img alt="17 skills" src="https://img.shields.io/badge/skills-17-E6007E"></a>
   <a href="#quick-start"><img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-ready-16161A?logo=claude&logoColor=white"></a>
   <a href="#quick-start"><img alt="Codex" src="https://img.shields.io/badge/Codex-ready-16161A"></a>
   <a href="#development"><img alt="tests: vitest" src="https://img.shields.io/badge/tests-vitest-00A0DF?logo=vitest&logoColor=white"></a>
@@ -82,7 +82,7 @@ The harness is five layers. You talk to the first one; the others make it reliab
 
 | Layer | What it is |
 |---|---|
-| **Brain** | Claude Code or Codex. Both read [`AGENTS.md`](AGENTS.md) (the rules) and pick one of 16 [skills](skills/) (the procedures). In Claude Code, 7 [subagents](.claude/agents/) take on research, strategy, copy, editing, prospecting, community and publishing. |
+| **Brain** | Claude Code or Codex. Both read [`AGENTS.md`](AGENTS.md) (the rules) and pick one of 17 [skills](skills/) (the procedures). In Claude Code, 7 [subagents](.claude/agents/) take on research, strategy, copy, editing, prospecting, community and publishing. |
 | **Memory** | Plain files per brand in `workspace/brands/<brand>/`. Brand, voice, offers, personas, radar and reports are Markdown the agent and you both edit. Leads, outbox, conversations, insights and trend data are records that only change through tools, so they stay valid and audited. |
 | **Hands** | The `mkt` MCP server: CRM, content pipeline, outbox, inbox sync, trend momentum and forecasts, a slide renderer, SMTP/IMAP, the WhatsApp Cloud API and a real Chrome per account. |
 | **Guardrails** | Human approval, a suppression list, automatic opt-out detection in six languages, consent rules, quiet hours, per-account rate limits and an audit log. Enforced in code, not just in the prompt. |
@@ -167,6 +167,8 @@ Run `mkt` again any time to add accounts, log in again, change routines, check e
 
 Needs git, Node 22.12+ (the installer uses nvm if you have it), Google Chrome, and Claude Code or Codex. Passwords and tokens go to a private `.env` on your computer, never into the brand files.
 
+Claude Code opens on `/mkt`, the brand's home screen. The first time, it asks whether you trust the folder: say yes, the harness's tools and permissions only switch on after that. If you run Claude in "don't ask" mode, the harness's `.claude/settings.json` already allows what its work needs (web search and fetch, reading, editing inside `workspace/`, the `mkt` tools) and nothing that sends or approves.
+
 Then ask for outcomes:
 
 ```text
@@ -199,8 +201,11 @@ In Codex, trust the project so `.codex/config.toml` loads. Put `bin/` on your `P
 
 Skills live in [`skills/`](skills/) and are shared by both agents (symlinked into `.claude/skills` and `.agents/skills`). In Claude Code they are also slash commands: `/trend-radar`, `/outreach`, ...
 
+Every session opened by `mkt` starts on **`/mkt`**, the home screen: where the brand stands (foundation, open questions, research, approval queue, inbox, leads, content, trends) and the three best next actions. Pick one and it runs the right skill.
+
 | | Skill | Does |
 |---|---|---|
+| **Home** | [`mkt`](skills/mkt/SKILL.md) | Status of a brand in a few lines and the next best actions; the starting point of every session |
 | **Understand** | [`brand-foundation`](skills/brand-foundation/SKILL.md) | Positioning, messaging hierarchy, proof bank, voice and offers from the website, socials and 8 founder questions |
 | | [`customer-research`](skills/customer-research/SKILL.md) | Voice of customer from reviews, Reddit, comments and your own inbox: JTBD, ranked pains, objections, a language bank |
 | | [`competitor-intel`](skills/competitor-intel/SKILL.md) | Competitor profiles, top posts, hooks, offers and ad libraries, turned into gaps you can own |
@@ -312,7 +317,7 @@ mkt daemon [--once] | install [--load] | uninstall
 
 ```text
 AGENTS.md            rules for both agents (CLAUDE.md imports it)
-skills/              16 shared skills + references (hooks, formats, outreach templates, platform playbooks)
+skills/              17 shared skills + references (hooks, formats, outreach templates, platform playbooks)
 .claude/agents/      7 subagents          .claude/settings.json   permissions (agents can't approve)
 src/
   core/              schemas, store (lock + atomic writes), policy, outbox, leads, content, conversations, trends, cron
@@ -366,7 +371,7 @@ What the tests cover, including the adversarial cases:
 ## Roadmap
 
 - [x] Brand memory, CRM, outbox with approval, policy and audit
-- [x] MCP server shared by Claude Code and Codex, 16 skills, 7 subagents
+- [x] MCP server shared by Claude Code and Codex, 17 skills (with the /mkt home), 7 subagents
 - [x] Chrome per account, 9 platform adapters with dry runs, inbox sync with opt-out handling
 - [x] Trend momentum and forecasts, carousel renderer, headless routines and daemon
 - [ ] Jobs: persistent research → plan → discuss → ask → execute files, with an `mkt ask` queue for scheduled runs

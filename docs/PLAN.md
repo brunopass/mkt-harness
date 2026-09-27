@@ -114,7 +114,7 @@ mkt routine list|run <name>        mkt daemon [--once] | daemon install (launchd
 
 ## Skills
 
-brand-foundation, customer-research, competitor-intel, trend-radar, content-strategy, idea-engine,
+mkt (home: status + next actions), brand-foundation, customer-research, competitor-intel, trend-radar, content-strategy, idea-engine,
 script-writer, repurpose, lead-magnet, lead-gen, outreach, inbox, publish, browser-ops, analytics-review,
 brand-development.
 

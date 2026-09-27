@@ -24,6 +24,8 @@ export interface SetupDeps {
   isRunning(run: ResearchRun): boolean;
   /** the finished run's summary, if any */
   researchSummary(ctx: Ctx, brand: string): string | undefined;
+  /** has the human accepted Claude Code's "trust this folder" prompt here? (project permissions apply only after) */
+  claudeTrusted(ctx: Ctx): boolean;
   /** poll interval while waiting for research, ms */
   pollMs?: number;
   platform: NodeJS.Platform;
@@ -36,6 +38,13 @@ export interface ResearchRun {
 }
 
 const ENGINE_LABEL: Record<Engine, string> = { claude: "Claude Code", codex: "Codex" };
+
+/** The first message when the agent opens: the home screen (state + next actions) unless a specific task is better. */
+export function homePrompt(engine: Engine, brand?: string): string {
+  return engine === "claude"
+    ? `/mkt${brand ? ` ${brand}` : ""}`
+    : `Use the mkt skill${brand ? ` for brand "${brand}"` : ""}: show where things stand and the next best actions.`;
+}
 
 /** What the unattended research run is asked to do. The scan file is the starting point. */
 export function researchPrompt(brand: string, website: string, scanFile?: string): string {
@@ -470,6 +479,9 @@ async function finish(ctx: Ctx, p: Prompter, deps: SetupDeps, brand: string, eng
   const task = cfg.website
     ? `Use the brand-foundation skill for brand "${brand}": start from ${cfg.website}, then ask me what you can't find.`
     : `Use the brand-foundation skill for brand "${brand}": ask me what you need to know.`;
+  // after research (or from the menu) the home screen shows what exists and what's next; a brand-new brand starts
+  // straight on its foundation
+  const promptFor = (e: Engine) => (fromMenu || run ? homePrompt(e, brand) : e === "claude" ? `/brand-foundation ${brand}` : task);
   const choice = engines.length
     ? await p.select<Engine | "done">({
         message: fromMenu ? "Open which agent?" : "Start now?",
@@ -487,8 +499,13 @@ async function finish(ctx: Ctx, p: Prompter, deps: SetupDeps, brand: string, eng
     if (!fromMenu) p.outro("All set. Run mkt any time to change something.");
     return;
   }
-  p.outro(`Opening ${choice === "claude" ? "Claude Code" : "Codex"}…`);
-  await deps.launchAgent(ctx, choice, fromMenu ? "" : choice === "claude" ? `/brand-foundation ${brand}` : task);
+  if (choice === "claude" && !deps.claudeTrusted(ctx))
+    p.note(
+      `Claude Code will ask whether you trust this folder. Choose "Yes, I trust this folder":\nthe harness's tools and permissions only switch on after that.`,
+      "First time in this folder",
+    );
+  p.outro(`Opening ${ENGINE_LABEL[choice]}…`);
+  await deps.launchAgent(ctx, choice, promptFor(choice));
 }
 
 // ---------------------------------------------------------------- status

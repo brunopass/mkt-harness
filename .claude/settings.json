@@ -4,6 +4,16 @@
   ],
   "permissions": {
     "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "WebSearch",
+      "WebFetch",
+      "Edit(workspace/**)",
+      "Skill",
+      "Agent",
+      "Task",
+      "TodoWrite",
       "mcp__mkt__brand_list",
       "mcp__mkt__brand_get",
       "mcp__mkt__brand_context",

@@ -22,10 +22,10 @@ import { launchdPlist, runDaemon } from "./daemon.js";
 import { syncAccount, syncAll } from "./inbox/sync.js";
 import { startMcp } from "./mcp/server.js";
 import { scanSite, describeProfile, saveProfile } from "./research/site.js";
-import { checkLogin, launchAgent, realDeps } from "./setup/deps.js";
+import { checkLogin, claudeTrusted, launchAgent, realDeps } from "./setup/deps.js";
 import { initWorkspace } from "./setup/helpers.js";
 import { Cancelled, clackPrompter } from "./setup/prompter.js";
-import { runSetup } from "./setup/tui.js";
+import { homePrompt, runSetup } from "./setup/tui.js";
 import { renderContent } from "./render/carousel.js";
 import { buildCommand, runAgent } from "./runner/agent.js";
 
@@ -83,7 +83,11 @@ async function openAgent(args: string[]): Promise<never> {
   const x = ctx();
   const known = args[0] === "claude" || args[0] === "codex";
   const engine = known ? (args[0] as "claude" | "codex") : x.config.engine;
-  await launchAgent(x, engine, (known ? args.slice(1) : args).join(" "));
+  const words = known ? args.slice(1) : args;
+  if (engine === "claude" && !claudeTrusted(x))
+    process.stderr.write('First time here: when Claude Code asks whether you trust this folder, choose "Yes, I trust this folder".\n');
+  // no message: start on the home screen (brand status and next actions)
+  await launchAgent(x, engine, words.length ? words.join(" ") : homePrompt(engine));
   process.exit(0);
 }
 

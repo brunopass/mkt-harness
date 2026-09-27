@@ -1,5 +1,6 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import nodemailer from "nodemailer";
 import { adapterFor, type AdapterEnv } from "../browser/adapters/index.js";
@@ -133,6 +134,17 @@ export function researchSummary(ctx: Ctx, brand: string): string | undefined {
   }
 }
 
+/** Claude Code records folder trust in ~/.claude.json; project permissions (.claude/settings.json) apply only after it. */
+export function claudeTrusted(ctx: Ctx): boolean {
+  try {
+    const cfg = JSON.parse(fs.readFileSync(path.join(os.homedir(), ".claude.json"), "utf8"));
+    const root = fs.realpathSync(ctx.root);
+    return cfg?.projects?.[root]?.hasTrustDialogAccepted === true || cfg?.projects?.[ctx.root]?.hasTrustDialogAccepted === true;
+  } catch {
+    return false;
+  }
+}
+
 export const realDeps: SetupDeps = {
   detectTools,
   openForLogin,
@@ -147,5 +159,6 @@ export const realDeps: SetupDeps = {
   startResearch,
   isRunning,
   researchSummary,
+  claudeTrusted,
   platform: process.platform,
 };
