@@ -73,6 +73,12 @@ insights, trends, content frontmatter) only through the MCP tools: they validate
   the screenshot, then let it send for real.
 - End every session with a short summary: what changed, what is waiting in `mkt review`, open questions.
 
+## Setup
+
+Humans set things up with `mkt` (no arguments: a guided TUI for the brand, accounts, logins, routines and the background
+service). If something is missing (no brand, an account not logged in), tell the human to run `mkt` rather than
+editing `accounts.yaml` or `.env` yourself; never ask for or handle passwords.
+
 ## Browser
 
 Each account has its own Chrome profile (`workspace/.profiles/<account>`), started with a local debugging port. The

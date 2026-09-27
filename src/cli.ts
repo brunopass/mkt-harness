@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import readline from "node:readline/promises";
 import { Command } from "commander";
-import { adapterFor, type AdapterEnv } from "./browser/adapters/index.js";
+import { adapterFor } from "./browser/adapters/index.js";
 import { chromePath, chromeStatus, closeChrome, detachAll, ensureChrome, getPage, goto, RESEARCH_PROFILE } from "./browser/chrome.js";
 import { dispatchDue, dispatchOne, type DispatchResult } from "./channels/dispatch.js";
 import { addAccount, createBrand, getAccount, getBrand, listAccounts, listBrands, listPersonas } from "./core/brands.js";
@@ -16,11 +16,15 @@ import { getLead, importLeadsCsv, listLeads, updateLead } from "./core/leads.js"
 import { approveOutbox, cancelOutbox, getOutbox, listOutbox, updateOutbox } from "./core/outbox.js";
 import { checkPolicy } from "./core/policy.js";
 import { Account, LEAD_STAGES, PLATFORMS, type LeadStage, type OutboxItem } from "./core/schemas.js";
-import { MktError, readJsonl, truncate, writeFileAtomic } from "./core/store.js";
+import { MktError, readJsonl, truncate } from "./core/store.js";
 import { fetchFeedAndObserve, momentum } from "./core/trends.js";
 import { launchdPlist, runDaemon } from "./daemon.js";
 import { syncAccount, syncAll } from "./inbox/sync.js";
 import { startMcp } from "./mcp/server.js";
+import { checkLogin, realDeps } from "./setup/deps.js";
+import { initWorkspace } from "./setup/helpers.js";
+import { Cancelled, clackPrompter } from "./setup/prompter.js";
+import { runSetup } from "./setup/tui.js";
 import { renderContent } from "./render/carousel.js";
 import { buildCommand, runAgent } from "./runner/agent.js";
 
@@ -68,27 +72,24 @@ program
   .description("create the workspace, config and MCP wiring for Claude Code (.mcp.json) and Codex (.codex/config.toml)")
   .action(() => {
     const x = ctx();
-    fs.mkdirSync(path.join(x.ws, "brands"), { recursive: true });
-    fs.mkdirSync(path.join(x.ws, "state"), { recursive: true });
-    const cfg = path.join(x.root, "mkt.config.yaml");
-    if (!fs.existsSync(cfg)) fs.copyFileSync(path.join(x.root, "templates", "mkt.config.yaml"), cfg);
-    const bin = path.join(x.root, "bin", "mkt");
-    writeFileAtomic(path.join(x.root, ".mcp.json"), JSON.stringify({ mcpServers: { mkt: { command: bin, args: ["mcp"] } } }, null, 2) + "\n");
-    writeFileAtomic(
-      path.join(x.root, ".codex", "config.toml"),
-      `# Project MCP config for Codex (trusted projects). Regenerate with: mkt init\n[mcp_servers.mkt]\ncommand = ${JSON.stringify(bin)}\nargs = ["mcp"]\ntool_timeout_sec = 300\n`,
-    );
-    for (const link of [path.join(x.root, ".claude", "skills"), path.join(x.root, ".agents", "skills")]) {
-      fs.mkdirSync(path.dirname(link), { recursive: true });
-      try {
-        if (!fs.lstatSync(link).isSymbolicLink()) throw new MktError(`${link} exists and is not a symlink`);
-      } catch (e: any) {
-        if (e.code !== "ENOENT") throw e;
-        fs.symlinkSync(path.relative(path.dirname(link), path.join(x.root, "skills")), link);
-      }
+    initWorkspace(x);
+    out(`workspace: ${x.ws}\nconfig:    ${path.join(x.root, "mkt.config.yaml")}\nMCP:       .mcp.json (Claude Code), .codex/config.toml (Codex; trust the project in Codex)\nskills:    .claude/skills, .agents/skills -> skills/`);
+    out(`\nnext: mkt setup   (or: mkt brand new <slug> --name "<Brand>")`);
+  });
+
+program
+  .command("setup")
+  .description("guided setup in the terminal: brand, accounts, logins, routines (also what `mkt` alone opens)")
+  .action(async () => {
+    if (!process.stdin.isTTY || !process.stdout.isTTY) throw new MktError("mkt setup needs an interactive terminal");
+    try {
+      await runSetup(ctx(), clackPrompter, realDeps);
+    } catch (e) {
+      if (!(e instanceof Cancelled)) throw e;
+      out(c.dim("\nSetup stopped. Run mkt again to pick up where you left off."));
+    } finally {
+      await detachAll();
     }
-    out(`workspace: ${x.ws}\nconfig:    ${cfg}\nMCP:       .mcp.json (Claude Code), .codex/config.toml (Codex; trust the project in Codex)\nskills:    .claude/skills, .agents/skills -> skills/`);
-    out(`\nnext: mkt brand new <slug> --name "<Brand>"  then  mkt account add <slug> <platform> <handle>  then  mkt browser open <account-id>`);
   });
 
 program
@@ -220,16 +221,8 @@ browser
     const x = ctx();
     const ids = id ? [getAccount(x, id)] : listAccounts(x).filter((a) => a.transport === "browser" && a.active);
     for (const a of ids) {
-      const adapter = adapterFor(a.platform);
-      const page = await getPage(x, a.id, { newTab: true });
-      try {
-        const env: AdapterEnv = { ctx: x, account: a, page, dryRun: true, shot: async () => "", log: () => {}, goto: (u) => goto(x, page, u) };
-        await env.goto(adapter.homeUrl);
-        const ok = await adapter.isLoggedIn(env);
-        out(`${ok ? c.green("logged in ") : c.red("logged out")} ${a.id}${ok ? "" : `  -> mkt browser open ${a.id}`}`);
-      } finally {
-        await page.close().catch(() => {});
-      }
+      const ok = await checkLogin(x, a.id);
+      out(`${ok ? c.green("logged in ") : c.red("logged out")} ${a.id}${ok ? "" : `  -> mkt browser open ${a.id}`}`);
     }
     await detachAll();
   });
@@ -480,7 +473,9 @@ daemon.command("uninstall").action(() => {
   out(`removed ${file}`);
 });
 
-program.parseAsync(process.argv).catch((e) => {
+// `mkt` alone opens the guided setup in a terminal, and prints help otherwise
+const argv = process.argv.length <= 2 && process.stdin.isTTY && process.stdout.isTTY ? [...process.argv, "setup"] : process.argv;
+program.parseAsync(argv).catch((e) => {
   process.stderr.write(c.red(`error: ${e instanceof MktError ? e.message : e?.stack ?? e}`) + "\n");
   process.exit(1);
 });

@@ -24,6 +24,12 @@ agent ›  Researched 34 profiles, 12 fit the ICP (score ≥ 70). Saved them as 
          customers of a competitor, so I left them out of the batch.
 ```
 
+**Install and set up with one command** ([details](#quick-start)):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/brunopass/mkt-harness/main/install.sh | bash
+```
+
 ---
 
 ## What it makes
@@ -122,35 +128,66 @@ When someone answers "stop", "unsubscribe", "sair", "darme de baja" or "désabon
 
 ## Quick start
 
-```sh
-git clone https://github.com/brunopass/mkt-harness && cd mkt-harness
-npm install
-./bin/mkt init        # workspace, config, MCP wiring for Claude Code (.mcp.json) and Codex (.codex/config.toml)
-./bin/mkt doctor      # Node, Chrome, config, agent CLIs, accounts
+One command. It installs mkt-harness in `~/mkt-harness` and opens the setup in your terminal:
 
-./bin/mkt brand new acme --name "Acme" --website https://acme.com --languages pt,en --timezone America/Sao_Paulo
-./bin/mkt account add acme instagram @acme            # account id: acme-instagram
-./bin/mkt account add acme whatsapp +5511999999999 --id acme-wa --inbox
-./bin/mkt browser open acme-instagram                 # its own Chrome window: log in once, 2FA and all
+```sh
+curl -fsSL https://raw.githubusercontent.com/brunopass/mkt-harness/main/install.sh | bash
 ```
 
-Requires Node 22.12+, Google Chrome, and Claude Code or Codex. In Codex, trust the project so `.codex/config.toml` loads. Put `bin/` on your `PATH` (or `npm link`) to type `mkt`.
-
-Then open the folder in `claude` or `codex` and ask for outcomes:
+The setup checks your machine, creates your brand, connects your accounts, opens a Chrome window for each login, turns on the routines you want, and starts Claude Code or Codex with the brand foundation ready to go (abridged):
 
 ```text
-Run brand-foundation for acme from acme.com, then customer-research on reviews and Reddit.
-Trend radar for acme in Brazil. Give me 10 scored ideas and script the top 3: a Reel, a carousel, a LinkedIn post.
+┌  mkt-harness
+◇  This computer
+│  ✓ Node.js        22.23.1
+│  ✓ Google Chrome  /Applications/Google Chrome.app
+│  ✓ Claude Code    2.1.283
+◆  Workspace ready: config, tools for Claude Code and Codex, skills
+◇  Brand name                     Acme Clinics
+◇  Website                        acme.com
+◇  Languages you publish in       Portuguese, English
+◇  Where does Acme Clinics publish or talk to customers?
+│  Instagram, WhatsApp, Email
+◇  Email provider                 Gmail / Google Workspace
+◇  Checking the SMTP login        SMTP login works
+◇  Chrome is open for acme-instagram
+◇  In that window, log in to Instagram as @acmeclinics. Then:   I'm logged in
+◇  Routines for Acme Clinics      trend-radar, inbox-triage
+◇  Keep mkt running in the background?   Yes
+└  Opening Claude Code…
+```
+
+Run `mkt` again any time to add accounts, log in again, change routines, check everything or open the agent. Already cloned the repo? `./bin/mkt` opens the same setup.
+
+Needs git, Node 22.12+ (the installer uses nvm if you have it), Google Chrome, and Claude Code or Codex. Passwords and tokens go to a private `.env` on your computer, never into the brand files.
+
+Then ask for outcomes:
+
+```text
+Trend radar for Acme in Brazil. Give me 10 scored ideas and script the top 3: a Reel, a carousel, a LinkedIn post.
 Find 20 clinic owners who engaged with competitors this week, score them, and draft a 3-step LinkedIn sequence.
 Sync the inboxes and draft replies. Flag anything that needs me.
 ```
 
-Approve and send:
+And approve what it prepares with `mkt review`. The background service sends it when it's due.
+
+<details>
+<summary><b>Manual setup</b> (no installer, no TUI)</summary>
 
 ```sh
-mkt review            # approve, edit in $EDITOR, reject with a reason, or dry-run each item
-mkt send --due        # or keep `mkt daemon` running (`mkt daemon install --load` on macOS)
+git clone https://github.com/brunopass/mkt-harness && cd mkt-harness
+npm install
+./bin/mkt init                                          # workspace, config, MCP wiring for Claude Code and Codex
+./bin/mkt brand new acme --name "Acme" --website https://acme.com --languages pt,en --timezone America/Sao_Paulo
+./bin/mkt account add acme instagram @acme              # account id: acme-instagram
+./bin/mkt account add acme whatsapp +5511999999999 --id acme-wa --inbox
+./bin/mkt browser open acme-instagram                   # its own Chrome window: log in once
+./bin/mkt daemon install --load                         # macOS: background sending + routines
 ```
+
+In Codex, trust the project so `.codex/config.toml` loads. Put `bin/` on your `PATH` (or `npm link`) to type `mkt`.
+
+</details>
 
 ## Skills
 
@@ -241,6 +278,7 @@ mkt daemon install --load                    # macOS launchd: sends due items, s
 <summary><b>CLI reference</b></summary>
 
 ```text
+mkt                             (no arguments) guided setup and menu, same as mkt setup
 mkt init | doctor | mcp
 mkt brand new <slug> --name <name> | list | show <slug>
 mkt account add <brand> <platform> <handle> [--id --transport --inbox --from --smtp-env --imap-env] | list
@@ -276,7 +314,9 @@ src/
   inbox/             IMAP + browser inbox sync, opt-out handling
   render/            carousel slides to PNG
   runner/            headless claude -p / codex exec
+  setup/             the guided TUI (mkt / mkt setup) and its helpers
   daemon.ts  cli.ts
+install.sh           one-command installer: clone, npm install, open the setup
 templates/           brand scaffold, config, leads CSV example
 workspace/brands/<brand>/
   brand.yaml brand.md voice.md offers.md competitors.md personas/   knowledge
@@ -289,7 +329,7 @@ workspace/brands/<brand>/
 ## Configuration
 
 - [`mkt.config.yaml`](mkt.config.yaml): approval per message type, quiet hours, rate limits, outreach rules, browser, routines, runner.
-- `.env` (gitignored, see [`.env.example`](.env.example)): SMTP/IMAP URLs and WhatsApp Cloud tokens. `accounts.yaml` refers to them by name only.
+- `.env` (gitignored, mode 600, see [`.env.example`](.env.example)): SMTP/IMAP URLs and WhatsApp Cloud tokens, written by the setup. `accounts.yaml` refers to them by name only.
 - `workspace/.profiles/` holds live logged-in sessions: treat it like a password manager. Real brands, profiles, logs and state are gitignored; only the example brand is versioned.
 
 ## Development

@@ -98,6 +98,8 @@ mkt-harness/
 ## CLI
 
 ```
+mkt (no args) = mkt setup       guided TUI: checks, brand, accounts, logins, routines, open the agent
+curl -fsSL .../install.sh | bash  one-command install that ends in mkt setup
 mkt init | doctor | mcp
 mkt brand new|list|show            mkt account add|list
 mkt browser open|close|status      (login once per account)
