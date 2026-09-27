@@ -1,0 +1,324 @@
+<p align="center">
+  <img src="docs/assets/banner.png" alt="mkt-harness: an AI marketing team for Claude Code and Codex. It researches, plans and writes. You approve. It publishes." width="100%">
+</p>
+
+<p align="center">
+  <a href="#quick-start"><img alt="Node 22.12+" src="https://img.shields.io/badge/node-22.12%2B-16161A?logo=nodedotjs&logoColor=white"></a>
+  <a href="src/"><img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-16161A?logo=typescript&logoColor=white"></a>
+  <a href="src/mcp/server.ts"><img alt="48 MCP tools" src="https://img.shields.io/badge/MCP-48%20tools-E6007E"></a>
+  <a href="#skills"><img alt="16 skills" src="https://img.shields.io/badge/skills-16-E6007E"></a>
+  <a href="#quick-start"><img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-ready-16161A?logo=claude&logoColor=white"></a>
+  <a href="#quick-start"><img alt="Codex" src="https://img.shields.io/badge/Codex-ready-16161A"></a>
+  <a href="#development"><img alt="tests: vitest" src="https://img.shields.io/badge/tests-vitest-00A0DF?logo=vitest&logoColor=white"></a>
+</p>
+
+**mkt-harness** turns [Claude Code](https://docs.anthropic.com/en/docs/claude-code) or [Codex](https://developers.openai.com/codex) into a marketing team. It studies the brand and its customers, follows trends and forecasts where they are going, plans content, writes scripts and carousels, finds and qualifies leads, writes personal outreach, answers the inbox, and posts to many accounts through real Chrome windows.
+
+Nothing reaches a person until you approve it. You ask for outcomes, like this (illustrative):
+
+```text
+you   ›  Find agency owners in São Paulo who complained about no-shows this month and draft a first message for the best 10.
+
+agent ›  Researched 34 profiles, 12 fit the ICP (score ≥ 70). Saved them as leads with the posts that qualified them.
+         10 personalised LinkedIn connect notes are waiting in `mkt review`. Two need your call: both are existing
+         customers of a competitor, so I left them out of the batch.
+```
+
+---
+
+## What it makes
+
+<p align="center">
+  <img src="docs/assets/contact-sheet.png" alt="Seven carousel slides rendered by the harness from one Markdown file" width="100%">
+</p>
+
+Every piece of content is a Markdown file with a brief, a script or slides, and a caption per platform. `content_render` turns the slides into on-brand 1080 × 1350 PNGs using the brand's colours and fonts, ready to post. The example above ships in [`workspace/brands/example`](workspace/brands/example/content).
+
+And every message waits for a human, with the evidence next to it (sample data):
+
+```text
+$ mkt review
+(1/10)
+ob_mg4k2x9a1f  DM via acme-ig (instagram)  [acme]
+to:        Ana Souza · @clinicasorriso
+lead:      ld_mg4jz81c02 stage=researched score=82 touches=0
+           Opened a second clinic in Pinheiros in August; posts weekly about patient reminders.
+why:       Owner, 2 locations, said "metade dos pacientes não confirma" in a story (saved as an insight).
+────────────────────────────────────────────────────────────
+Oi Ana! Vi que vocês abriram a segunda unidade em Pinheiros, parabéns. Você comentou que metade dos
+pacientes não confirma a consulta: montamos um checklist de 10 minutos pra isso. Quer que eu te mande?
+────────────────────────────────────────────────────────────
+[a]pprove  [e]dit  [r]eject  [d]ry-run  [s]kip  [q]uit >
+```
+
+## How it works
+
+```mermaid
+flowchart LR
+  M[("brand memory<br/>personas · insights · trends<br/>content · leads · conversations")]
+  R["research<br/>brand · customers<br/>competitors · trends"] --> P["plan<br/>strategy · scored ideas<br/>sequences"]
+  P --> D["discuss<br/>options · evidence<br/>editor review"]
+  D --> A(("ask<br/>you decide"))
+  A --> E["execute<br/>scripts · carousels<br/>outreach · replies"]
+  E --> O{{"outbox"}}
+  O --> Y(("approve<br/>mkt review"))
+  Y --> S["send<br/>policy checks<br/>Chrome · SMTP · WhatsApp"]
+  R --> M
+  M --> P
+  S -->|"replies · opt-outs · metrics"| M
+  classDef human fill:#E6007E,stroke:#E6007E,color:#ffffff
+  classDef store fill:#ECEEF1,stroke:#16161A,color:#16161A
+  class A,Y human
+  class M,O store
+```
+
+The harness is five layers. You talk to the first one; the others make it reliable.
+
+| Layer | What it is |
+|---|---|
+| **Brain** | Claude Code or Codex. Both read [`AGENTS.md`](AGENTS.md) (the rules) and pick one of 16 [skills](skills/) (the procedures). In Claude Code, 7 [subagents](.claude/agents/) take on research, strategy, copy, editing, prospecting, community and publishing. |
+| **Memory** | Plain files per brand in `workspace/brands/<brand>/`. Brand, voice, offers, personas, radar and reports are Markdown the agent and you both edit. Leads, outbox, conversations, insights and trend data are records that only change through tools, so they stay valid and audited. |
+| **Hands** | The `mkt` MCP server: CRM, content pipeline, outbox, inbox sync, trend momentum and forecasts, a slide renderer, SMTP/IMAP, the WhatsApp Cloud API and a real Chrome per account. |
+| **Guardrails** | Human approval, a suppression list, automatic opt-out detection in six languages, consent rules, quiet hours, per-account rate limits and an audit log. Enforced in code, not just in the prompt. |
+| **Autonomy** | `mkt daemon` sends what you approved when it's due, syncs inboxes and runs scheduled routines with `claude -p` or `codex exec`. Routines can research and draft, never send. |
+
+## The workflow: research → plan → discuss → ask → execute
+
+Every output, from a single reply to a month-long campaign, goes through the same five steps. Small jobs pass through them in seconds; big ones stop and wait for you.
+
+| Step | What happens | Skills | What it leaves behind |
+|---|---|---|---|
+| **Research** | Collect evidence: customers' own words, competitor patterns, measured trend signals, prospect facts | `brand-foundation` `customer-research` `competitor-intel` `trend-radar` `lead-gen` | insights with verbatim quotes, personas, `competitors.md`, `trends/radar.md`, leads |
+| **Plan** | Decide what to make, for whom, where and when; score the ideas | `content-strategy` `idea-engine` `outreach` `lead-magnet` | a calendar in `reports/`, content items scored 0–100, sequences |
+| **Discuss** | Lay out options with evidence and trade-offs; the `editor` checks voice, claims and limits | `brand-development`, `editor` subagent | a recommendation in the chat or a report |
+| **Ask** | Get your decisions: unknown facts go to "Open questions", finished messages go to `mkt review` | all | answers in the brand files, approved outbox items |
+| **Execute** | Write, render, schedule, send, reply, then measure and feed the results back | `script-writer` `repurpose` `publish` `inbox` `analytics-review` | posts, DMs, emails, updated scores and personas |
+
+> **Today** the final ask (approving the exact words) is enforced by code; the earlier discuss and ask happen in the conversation. Persistent job files with an `mkt ask` queue, so that scheduled runs can also stop and ask, are next on the [roadmap](#roadmap).
+
+## Sending, safely
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant A as Agent
+  participant O as Outbox
+  participant Y as You
+  participant P as Policy
+  participant C as Channel
+  A->>O: outbox_draft (message + rationale)
+  O-->>Y: waits in mkt review
+  Y->>O: approve / edit / reject / dry-run
+  O->>P: at send time
+  P-->>O: blocked or deferred, with the reason
+  P->>C: allowed
+  C-->>O: sent (url) or failed (screenshot)
+  O->>A: lead, conversation and audit updated
+```
+
+The policy checks, in order: the account is active and belongs to the brand · someone approved it · the recipient isn't suppressed or `do_not_contact` · a reply only goes to someone who wrote first · a first WhatsApp message needs opt-in and a cold email needs a recorded basis · no more than 4 unanswered touches, 48 h apart · cold outreach waits for the brand's morning · each account stays within its daily limit and minimum gap.
+
+When someone answers "stop", "unsubscribe", "sair", "darme de baja" or "désabonner", the harness suppresses them, closes the lead and cancels everything queued for them before the next send.
+
+## Quick start
+
+```sh
+git clone https://github.com/brunopass/mkt-harness && cd mkt-harness
+npm install
+./bin/mkt init        # workspace, config, MCP wiring for Claude Code (.mcp.json) and Codex (.codex/config.toml)
+./bin/mkt doctor      # Node, Chrome, config, agent CLIs, accounts
+
+./bin/mkt brand new acme --name "Acme" --website https://acme.com --languages pt,en --timezone America/Sao_Paulo
+./bin/mkt account add acme instagram @acme            # account id: acme-instagram
+./bin/mkt account add acme whatsapp +5511999999999 --id acme-wa --inbox
+./bin/mkt browser open acme-instagram                 # its own Chrome window: log in once, 2FA and all
+```
+
+Requires Node 22.12+, Google Chrome, and Claude Code or Codex. In Codex, trust the project so `.codex/config.toml` loads. Put `bin/` on your `PATH` (or `npm link`) to type `mkt`.
+
+Then open the folder in `claude` or `codex` and ask for outcomes:
+
+```text
+Run brand-foundation for acme from acme.com, then customer-research on reviews and Reddit.
+Trend radar for acme in Brazil. Give me 10 scored ideas and script the top 3: a Reel, a carousel, a LinkedIn post.
+Find 20 clinic owners who engaged with competitors this week, score them, and draft a 3-step LinkedIn sequence.
+Sync the inboxes and draft replies. Flag anything that needs me.
+```
+
+Approve and send:
+
+```sh
+mkt review            # approve, edit in $EDITOR, reject with a reason, or dry-run each item
+mkt send --due        # or keep `mkt daemon` running (`mkt daemon install --load` on macOS)
+```
+
+## Skills
+
+Skills live in [`skills/`](skills/) and are shared by both agents (symlinked into `.claude/skills` and `.agents/skills`). In Claude Code they are also slash commands: `/trend-radar`, `/outreach`, ...
+
+| | Skill | Does |
+|---|---|---|
+| **Understand** | [`brand-foundation`](skills/brand-foundation/SKILL.md) | Positioning, messaging hierarchy, proof bank, voice and offers from the website, socials and 8 founder questions |
+| | [`customer-research`](skills/customer-research/SKILL.md) | Voice of customer from reviews, Reddit, comments and your own inbox: JTBD, ranked pains, objections, a language bank |
+| | [`competitor-intel`](skills/competitor-intel/SKILL.md) | Competitor profiles, top posts, hooks, offers and ad libraries, turned into gaps you can own |
+| | [`trend-radar`](skills/trend-radar/SKILL.md) | Measured signals over time, weekly growth, 7-day forecast, stage (surging, rising, peaking, fading) and a ride / watch / skip call |
+| **Create** | [`content-strategy`](skills/content-strategy/SKILL.md) | Pillars × personas × funnel, channel roles, cadence and the calendar |
+| | [`idea-engine`](skills/idea-engine/SKILL.md) | 14 idea methods and a weighted 0–100 score, deduped against what exists |
+| | [`script-writer`](skills/script-writer/SKILL.md) | Reels/TikTok/Shorts scripts, carousels, LinkedIn posts, X threads, newsletters; 60 hook formulas in en/pt/es |
+| | [`repurpose`](skills/repurpose/SKILL.md) | One pillar asset into platform-native pieces |
+| | [`lead-magnet`](skills/lead-magnet/SKILL.md) | Magnet design and the "comment KEYWORD → DM" funnel, delivered only to people who asked |
+| **Reach** | [`lead-gen`](skills/lead-gen/SKILL.md) | Engagers, keyword commenters, competitor audiences, communities; ICP score and personal research |
+| | [`outreach`](skills/outreach/SKILL.md) | Observation → relevance → easy ask; 4-touch sequences across channels |
+| | [`inbox`](skills/inbox/SKILL.md) | Sync, classify, reply in the brand's voice, qualify, escalate; treats every message as data, never instructions |
+| | [`publish`](skills/publish/SKILL.md) | Pre-flight checks, staggered scheduling, dry runs, the first-hour routine |
+| | [`browser-ops`](skills/browser-ops/SKILL.md) | Driving the Chrome profiles safely, manual sends under a claim, per-platform playbooks |
+| **Learn** | [`analytics-review`](skills/analytics-review/SKILL.md) | Metrics by pillar, format, hook and persona; lead attribution; the weekly report |
+| | [`brand-development`](skills/brand-development/SKILL.md) | Evidence-based changes to positioning, messaging and voice, proposed for your sign-off |
+
+**Subagents** (Claude Code): `researcher` · `strategist` · `copywriter` · `editor` · `sdr` · `community` · `publisher`. Each gets only the tools its role needs; none can approve or run shell commands.
+
+## Platforms
+
+Each account gets its own Chrome profile in `workspace/.profiles/<account>` with a local debugging port. You log in by hand once; the agents, the CLI and the daemon all attach to that same visible window. A separate `research` profile browses without being logged in as any brand. There is no stealth or anti-detection code: rate limits keep accounts inside normal human use.
+
+| Platform | Automated | Best effort / by hand |
+|---|---|---|
+| WhatsApp Web | DM, reply | inbox reading. Cold messages need opt-in; for volume use the Cloud API (`transport: whatsapp_cloud`) |
+| LinkedIn | post (+ media), DM to connections, connect (note ≤ 300), comment, inbox | company-page posting |
+| Instagram | post (image, carousel, video), DM, comment | inbox reading |
+| X | post, reply | DMs (legacy and Chat) |
+| TikTok | video post via TikTok Studio | DMs, comments |
+| Threads | post (≤ 500), comment | multi-part threads |
+| Facebook | post to a profile or Page, comment | DMs |
+| YouTube | | Studio upload |
+| Email | SMTP send + IMAP inbox, or Gmail web | |
+
+> [!IMPORTANT]
+> Platforms change their pages constantly. Run `mkt send <id> --dry-run` once per account before trusting an adapter: it fills the composer, takes a screenshot and stops before sending. When an adapter breaks, the agent can finish the item by hand under `outbox_claim` / `outbox_complete`, following the platform's [playbook](skills/browser-ops/references/platforms/).
+
+## Automation
+
+Routines in [`mkt.config.yaml`](mkt.config.yaml) are cron jobs for the agent. They run headless with a restricted tool profile: research, write files, update records, draft to the outbox. They cannot send, claim or type into a browser unless you allow clicks for that routine.
+
+```yaml
+routines:
+  - name: trend-radar
+    cron: "0 8 * * 1-5"          # in config.timezone
+    brand: acme
+    engine: claude               # or codex
+    prompt: "Use trend-radar: record today's signals, update trends/radar.md, add up to 3 ideas for rising trends."
+  - name: inbox-triage
+    cron: "*/30 9-20 * * *"
+    brand: acme
+    prompt: "Use inbox: sync, classify, record insights and draft replies for review."
+```
+
+```sh
+mkt routine run trend-radar                  # run one now
+mkt agent --brand acme "add 5 ideas for next week using idea-engine"
+mkt daemon install --load                    # macOS launchd: sends due items, syncs inboxes, runs routines
+```
+
+<details>
+<summary><b>Tools the agent can use</b> (48, MCP server <code>mkt</code>)</summary>
+
+| Area | Tools |
+|---|---|
+| Brand | `brand_list` `brand_get` `brand_context` `account_list` |
+| Content | `content_create` `content_get` `content_list` `content_update` `content_render` `content_schedule` |
+| Leads | `lead_upsert` `lead_get` `lead_list` `lead_update` |
+| Outbox | `outbox_draft` `outbox_list` `outbox_get` `outbox_update` `outbox_cancel` `outbox_approve` (off by default) `outbox_dispatch` `outbox_claim` `outbox_complete` |
+| Inbox | `inbox_sync` `conversation_list` `conversation_get` `conversation_log` |
+| Insights & trends | `insight_add` `insight_list` `trend_observe` `trend_momentum` `trend_fetch_feed` |
+| Safety | `suppress` `suppression_check` `policy_status` |
+| Browser | `browser_open` `browser_navigate` `browser_snapshot` `browser_text` `browser_screenshot` `browser_scroll` `browser_tabs` `browser_close` `browser_login_status` `browser_click` `browser_type` `browser_press` `browser_upload` |
+
+`browser_snapshot` returns every interactive element as `[e12] button "Publicar"`, and the agent acts on those refs. In headless routines, sending and browser input tools are not registered at all.
+
+</details>
+
+<details>
+<summary><b>CLI reference</b></summary>
+
+```text
+mkt init | doctor | mcp
+mkt brand new <slug> --name <name> | list | show <slug>
+mkt account add <brand> <platform> <handle> [--id --transport --inbox --from --smtp-env --imap-env] | list
+mkt browser open <account|research> [url] | close [account] [--all] | status | check [account]
+mkt content list <brand> [--status] | render <brand> <id>
+mkt leads list <brand> | show <brand> <id> | import <brand> <csv> | set-stage <brand> <id> <stage>
+mkt outbox [--brand] [--status] [--all]
+mkt review [--brand]           mkt approve <ids...>        mkt reject <id> --reason <text>
+mkt send <id> [--dry-run]      mkt send --due
+mkt inbox sync [account] | list <brand> [--needs-reply]
+mkt trends fetch <brand> <feed|google-trends:BR> | momentum <brand> [--days]
+mkt suppress <email|+phone|platform:handle...> --reason <text>
+mkt audit [--tail n]
+mkt agent "<task>" [--brand --engine claude|codex --browser-actions --print-command]
+mkt routine list | run <name>
+mkt daemon [--once] | install [--load] | uninstall
+```
+
+</details>
+
+<details>
+<summary><b>Project layout</b></summary>
+
+```text
+AGENTS.md            rules for both agents (CLAUDE.md imports it)
+skills/              16 shared skills + references (hooks, formats, outreach templates, platform playbooks)
+.claude/agents/      7 subagents          .claude/settings.json   permissions (agents can't approve)
+src/
+  core/              schemas, store (lock + atomic writes), policy, outbox, leads, content, conversations, trends, cron
+  mcp/server.ts      the 48 tools
+  browser/           Chrome per account over CDP, snapshot refs, 9 platform adapters
+  channels/          dispatcher, SMTP, WhatsApp Cloud API
+  inbox/             IMAP + browser inbox sync, opt-out handling
+  render/            carousel slides to PNG
+  runner/            headless claude -p / codex exec
+  daemon.ts  cli.ts
+templates/           brand scaffold, config, leads CSV example
+workspace/brands/<brand>/
+  brand.yaml brand.md voice.md offers.md competitors.md personas/   knowledge
+  content/  assets/  trends/  reports/                             work
+  leads.json outbox.json conversations.jsonl insights.jsonl         records
+```
+
+</details>
+
+## Configuration
+
+- [`mkt.config.yaml`](mkt.config.yaml): approval per message type, quiet hours, rate limits, outreach rules, browser, routines, runner.
+- `.env` (gitignored, see [`.env.example`](.env.example)): SMTP/IMAP URLs and WhatsApp Cloud tokens. `accounts.yaml` refers to them by name only.
+- `workspace/.profiles/` holds live logged-in sessions: treat it like a password manager. Real brands, profiles, logs and state are gitignored; only the example brand is versioned.
+
+## Development
+
+```sh
+npm run typecheck
+npm test                 # core, policy, MCP server over stdio, skills/subagents lint
+npm run test:browser     # headless Chrome: snapshot refs, dry run vs send against a local fake site, inbox dedupe, renderer
+npm run readme:assets    # re-render the images in this README
+```
+
+## Roadmap
+
+- [x] Brand memory, CRM, outbox with approval, policy and audit
+- [x] MCP server shared by Claude Code and Codex, 16 skills, 7 subagents
+- [x] Chrome per account, 9 platform adapters with dry runs, inbox sync with opt-out handling
+- [x] Trend momentum and forecasts, carousel renderer, headless routines and daemon
+- [ ] Jobs: persistent research → plan → discuss → ask → execute files, with an `mkt ask` queue for scheduled runs
+- [ ] Adapter calibration on live accounts, per platform
+- [ ] Web review queue (approve from your phone)
+- [ ] Metrics collection per platform feeding `analytics-review`
+- [ ] Official APIs behind the same outbox (LinkedIn Pages, Meta Graph, X)
+- [ ] Image and video generation hooks
+- [ ] Multi-tenant packaging for agencies
+
+## Responsible use
+
+mkt-harness speaks for real brands through their real accounts. It will not run fake personas, impersonate anyone, invent reviews or proof, or make your own accounts engage with each other to fake traction. Opt-outs are permanent, first WhatsApp messages need consent, cold email carries an opt-out and a sender identity, and personal data stays minimal with its source recorded. The full rules are in [`AGENTS.md`](AGENTS.md).
+
+---
+
+<sub>Plan and design notes: [`docs/PLAN.md`](docs/PLAN.md). No license has been chosen yet, so all rights are reserved for now.</sub>

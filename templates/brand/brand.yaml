@@ -1,0 +1,18 @@
+# Structured brand config. Narrative lives in brand.md / voice.md / offers.md / personas/.
+name: "{{name}}"
+website: "{{website}}"
+languages: {{languages}}
+timezone: "{{timezone}}"
+category: ""            # e.g. "B2B SaaS for clinics", "DTC skincare"
+sender:                 # legal identity for cold email footers
+  name: "{{name}}"
+  address: ""           # postal address (required for cold email in many countries)
+visual:                 # used by the carousel renderer
+  bg: "#0f0f10"
+  fg: "#f5f5f4"
+  accent: "#f97316"
+  muted: "#a8a29e"
+  font: "Inter"
+  headingFont: "Inter"
+pillars: []             # 3-5 content pillars, e.g. ["behind the scenes", "customer wins", "how-to"]
+banned: []              # words and claims we never use

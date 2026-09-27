@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# mkt CLI shim: runs the TypeScript sources directly (Node >= 22.12 + tsx).
+set -euo pipefail
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"; SOURCE="$(readlink "$SOURCE")"; [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"; done
+ROOT="$(cd -P "$(dirname "$SOURCE")/.." && pwd)"
+major="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
+if [ "$major" -lt 22 ]; then
+  if [ -s "$HOME/.nvm/nvm.sh" ]; then . "$HOME/.nvm/nvm.sh" >/dev/null; nvm use 22 >/dev/null 2>&1 || true; fi
+fi
+exec node --import "$ROOT/node_modules/tsx/dist/loader.mjs" "$ROOT/src/cli.ts" "$@"

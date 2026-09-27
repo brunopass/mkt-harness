@@ -1,0 +1,32 @@
+# Accounts for this brand. Ids are global (they name the Chrome profile). Add with:
+#   mkt account add example instagram @handle
+# transport: browser (real Chrome profile) | smtp (email) | whatsapp_cloud (official API)
+accounts:
+  - id: example-ig
+    platform: instagram
+    handle: "@examplestudio"
+    transport: browser
+    active: true
+    inbox: true
+  - id: example-li
+    platform: linkedin
+    handle: https://www.linkedin.com/company/example
+    transport: browser
+    active: true
+    inbox: false
+  - id: example-wa
+    platform: whatsapp
+    handle: "+34600000000"
+    transport: browser
+    active: true
+    inbox: true
+  - id: example-email
+    platform: email
+    handle: Example Studio <hello@example.com>
+    transport: smtp
+    active: true
+    inbox: true
+    email:
+      from: Example Studio <hello@example.com>
+      smtpUrlEnv: MKT_SMTP_EXAMPLE
+      imapUrlEnv: MKT_IMAP_EXAMPLE

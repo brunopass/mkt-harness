@@ -1,0 +1,4 @@
+# Accounts for this brand. Ids are global (they name the Chrome profile). Add with:
+#   mkt account add {{slug}} instagram @handle
+# transport: browser (real Chrome profile) | smtp (email) | whatsapp_cloud (official API)
+accounts: []
