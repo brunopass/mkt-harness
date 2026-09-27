@@ -15,7 +15,8 @@ account while researching.
 
 ## Workflow
 1. `brand_context {brand}`; read `competitors.md` and `insight_list {brand, kind: ["competitor"]}`.
-2. **Website pass** (WebFetch): home headline + subhead, category they claim, pricing page (tiers, anchor price,
+2. **Website pass**: `site_scan {url, brand}` gives a structured first read (positioning line, languages, socials,
+   contacts, look) saved to `research/<host>.md`; then WebFetch for depth: home headline + subhead, category they claim, pricing page (tiers, anchor price,
    free trial/freemium, annual discount), guarantee, main CTA, proof they show. Capture the headline verbatim.
 3. **Social pass** (browser, read-only, on a logged-in brand account of the same platform):
    `browser_open {account, url: "<competitor profile>"}`, `browser_scroll`, `browser_text`, `browser_screenshot`

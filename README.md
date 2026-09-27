@@ -5,7 +5,7 @@
 <p align="center">
   <a href="#quick-start"><img alt="Node 22.12+" src="https://img.shields.io/badge/node-22.12%2B-16161A?logo=nodedotjs&logoColor=white"></a>
   <a href="src/"><img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-16161A?logo=typescript&logoColor=white"></a>
-  <a href="src/mcp/server.ts"><img alt="48 MCP tools" src="https://img.shields.io/badge/MCP-48%20tools-E6007E"></a>
+  <a href="src/mcp/server.ts"><img alt="49 MCP tools" src="https://img.shields.io/badge/MCP-49%20tools-E6007E"></a>
   <a href="#skills"><img alt="16 skills" src="https://img.shields.io/badge/skills-16-E6007E"></a>
   <a href="#quick-start"><img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-ready-16161A?logo=claude&logoColor=white"></a>
   <a href="#quick-start"><img alt="Codex" src="https://img.shields.io/badge/Codex-ready-16161A"></a>
@@ -134,7 +134,7 @@ One command. It installs mkt-harness in `~/mkt-harness` and opens the setup in y
 curl -fsSL https://raw.githubusercontent.com/brunopass/mkt-harness/main/install.sh | bash
 ```
 
-The setup checks your machine, creates your brand, connects your accounts, opens a Chrome window for each login, turns on the routines you want, and starts Claude Code or Codex with the brand foundation ready to go (abridged):
+Start with your website. The setup reads it in a headless Chrome (name, description, languages, socials, contacts, address, country and timezone, and the real colours and fonts), pre-fills everything after it, and pre-selects the accounts the site links to. It can then research the business in depth in the background while you log in to your accounts: Claude Code or Codex drafts the brand, voice, offers, customer profiles and competitors, and lists what only you can answer. Abridged:
 
 ```text
 ┌  mkt-harness
@@ -142,22 +142,28 @@ The setup checks your machine, creates your brand, connects your accounts, opens
 │  ✓ Node.js        22.23.1
 │  ✓ Google Chrome  /Applications/Google Chrome.app
 │  ✓ Claude Code    2.1.283
-◆  Workspace ready: config, tools for Claude Code and Codex, skills
-◇  Brand name                     Acme Clinics
-◇  Website                        acme.com
-◇  Languages you publish in       Portuguese, English
-◇  Where does Acme Clinics publish or talk to customers?
-│  Instagram, WhatsApp, Email
-◇  Email provider                 Gmail / Google Workspace
-◇  Checking the SMTP login        SMTP login works
+◇  Your business website. mkt reads it and fills in what it can.   acme.com.br
+◇  Read 4 pages of acme.com.br
+◇  What mkt found
+│  Name       Acme Clínicas
+│  Languages  pt, es
+│  Location   Rua Augusta 100, São Paulo, BR · BR (America/Sao_Paulo)
+│  Social     instagram @acmeclinicas · linkedin …/company/acme-clinicas · whatsapp +5511999990000
+│  Look       background #ffffff · text #1c1917 · accent #0e7490 · Poppins / Playfair Display
+◇  Brand name                     Acme Clínicas
+◇  Where does Acme Clínicas publish or talk to customers? Pre-selected: what the website links to.
+│  Instagram, LinkedIn, WhatsApp, Email
+◇  Research Acme Clínicas in depth now?   Yes: it runs in the background
 ◇  Chrome is open for acme-instagram
-◇  In that window, log in to Instagram as @acmeclinics. Then:   I'm logged in
-◇  Routines for Acme Clinics      trend-radar, inbox-triage
-◇  Keep mkt running in the background?   Yes
+◇  In that window, log in to Instagram as @acmeclinicas. Then:   I'm logged in
+◇  Routines for Acme Clínicas     trend-radar, inbox-triage
+◇  The research is still running. Wait for it?   Wait here
+◇  Research summary
+│  Filled brand.md, voice.md, offers.md, 2 personas, 4 competitors. 5 open questions for you.
 └  Opening Claude Code…
 ```
 
-Run `mkt` again any time to add accounts, log in again, change routines, check everything or open the agent. Already cloned the repo? `./bin/mkt` opens the same setup.
+Run `mkt` again any time to add accounts, log in again, change routines, check everything or open the agent (`mkt open` goes straight there). Already cloned the repo? `./bin/mkt` opens the same setup.
 
 Needs git, Node 22.12+ (the installer uses nvm if you have it), Google Chrome, and Claude Code or Codex. Passwords and tokens go to a private `.env` on your computer, never into the brand files.
 
@@ -257,7 +263,7 @@ mkt daemon install --load                    # macOS launchd: sends due items, s
 ```
 
 <details>
-<summary><b>Tools the agent can use</b> (48, MCP server <code>mkt</code>)</summary>
+<summary><b>Tools the agent can use</b> (49, MCP server <code>mkt</code>)</summary>
 
 | Area | Tools |
 |---|---|
@@ -266,6 +272,7 @@ mkt daemon install --load                    # macOS launchd: sends due items, s
 | Leads | `lead_upsert` `lead_get` `lead_list` `lead_update` |
 | Outbox | `outbox_draft` `outbox_list` `outbox_get` `outbox_update` `outbox_cancel` `outbox_approve` (off by default) `outbox_dispatch` `outbox_claim` `outbox_complete` |
 | Inbox | `inbox_sync` `conversation_list` `conversation_get` `conversation_log` |
+| Research | `site_scan` (any public site, yours or a competitor's: identity, socials, contacts, colours, fonts, page text) |
 | Insights & trends | `insight_add` `insight_list` `trend_observe` `trend_momentum` `trend_fetch_feed` |
 | Safety | `suppress` `suppression_check` `policy_status` |
 | Browser | `browser_open` `browser_navigate` `browser_snapshot` `browser_text` `browser_screenshot` `browser_scroll` `browser_tabs` `browser_close` `browser_login_status` `browser_click` `browser_type` `browser_press` `browser_upload` |
@@ -279,8 +286,9 @@ mkt daemon install --load                    # macOS launchd: sends due items, s
 
 ```text
 mkt                             (no arguments) guided setup and menu, same as mkt setup
+mkt open [claude|codex] [first message...]      open the agent in the harness folder
 mkt init | doctor | mcp
-mkt brand new <slug> --name <name> | list | show <slug>
+mkt brand new <slug> --name <name> | list | show <slug> | scan <url> [--brand <slug>] [--json]
 mkt account add <brand> <platform> <handle> [--id --transport --inbox --from --smtp-env --imap-env] | list
 mkt browser open <account|research> [url] | close [account] [--all] | status | check [account]
 mkt content list <brand> [--status] | render <brand> <id>
@@ -308,7 +316,8 @@ skills/              16 shared skills + references (hooks, formats, outreach tem
 .claude/agents/      7 subagents          .claude/settings.json   permissions (agents can't approve)
 src/
   core/              schemas, store (lock + atomic writes), policy, outbox, leads, content, conversations, trends, cron
-  mcp/server.ts      the 48 tools
+  mcp/server.ts      the 49 tools
+  research/          site scanner (headless Chrome) used by setup, site_scan and mkt brand scan
   browser/           Chrome per account over CDP, snapshot refs, 9 platform adapters
   channels/          dispatcher, SMTP, WhatsApp Cloud API
   inbox/             IMAP + browser inbox sync, opt-out handling
@@ -336,10 +345,23 @@ workspace/brands/<brand>/
 
 ```sh
 npm run typecheck
-npm test                 # core, policy, MCP server over stdio, skills/subagents lint
-npm run test:browser     # headless Chrome: snapshot refs, dry run vs send against a local fake site, inbox dedupe, renderer
+npm test                 # everything that doesn't need a browser
+npm run test:browser     # + headless Chrome against local fixture sites
 npm run readme:assets    # re-render the images in this README
 ```
+
+What the tests cover, including the adversarial cases:
+
+| Area | Checks | Adversarial |
+|---|---|---|
+| Policy and outbox | approval, rate limits, quiet hours across midnight, consent, max touches, crash recovery | sends to someone suppressed after approval, replies to people who never wrote, edits after approval |
+| Inbox | dedupe of scraped chats, name-only contacts | opt-outs in six languages (and look-alikes that are not opt-outs) cancel queued messages |
+| MCP server | the real server over stdio, headless tool profile | agents calling `outbox_approve`, unknown accounts |
+| Site scanner | identity, languages, socials across pages, contacts, colours and fonts | spoofed social links (`instagram.com.evil.com`, `javascript:`), prompt injection that tries to break out of the snapshot's quoting, 3 000-deep and 20 000-item JSON-LD, hanging and failing pages, redirects off-site, `localhost` / private / cloud-metadata addresses, YAML-shaped values, control and bidi characters |
+| Setup TUI | the whole first run with scripted answers, the menu, pre-fill from a domain, background research | invalid answers, SMTP failures, a site that can't be read, `.env` values with `$( )`, mixed quotes and line breaks (checked with Node's own loader) |
+| Agent hand-off | `mkt open` through the real shell script | arguments with `$( )`, backticks, `;`, `*`, `-rf`: passed literally, nothing executed, no Node parent left behind |
+| Browser | snapshot refs, dry run vs real send against a fake social site, adapter failure screenshots, renderer | |
+| Skills | frontmatter, only real tool names, links resolve | no subagent can approve or run shell commands |
 
 ## Roadmap
 

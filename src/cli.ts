@@ -21,7 +21,8 @@ import { fetchFeedAndObserve, momentum } from "./core/trends.js";
 import { launchdPlist, runDaemon } from "./daemon.js";
 import { syncAccount, syncAll } from "./inbox/sync.js";
 import { startMcp } from "./mcp/server.js";
-import { checkLogin, realDeps } from "./setup/deps.js";
+import { scanSite, describeProfile, saveProfile } from "./research/site.js";
+import { checkLogin, launchAgent, realDeps } from "./setup/deps.js";
 import { initWorkspace } from "./setup/helpers.js";
 import { Cancelled, clackPrompter } from "./setup/prompter.js";
 import { runSetup } from "./setup/tui.js";
@@ -77,6 +78,23 @@ program
     out(`\nnext: mkt setup   (or: mkt brand new <slug> --name "<Brand>")`);
   });
 
+/** `mkt open [claude|codex] [words...]`: everything after the engine is the first message, taken literally. */
+async function openAgent(args: string[]): Promise<never> {
+  const x = ctx();
+  const known = args[0] === "claude" || args[0] === "codex";
+  const engine = known ? (args[0] as "claude" | "codex") : x.config.engine;
+  await launchAgent(x, engine, (known ? args.slice(1) : args).join(" "));
+  process.exit(0);
+}
+
+program
+  .command("open [engine] [prompt...]")
+  .description("open Claude Code (or codex) in the harness folder, optionally with a first message")
+  .helpOption(false)
+  .action(async () => {
+    await openAgent(process.argv.slice(3)); // handled before parsing; kept here for --help
+  });
+
 program
   .command("setup")
   .description("guided setup in the terminal: brand, accounts, logins, routines (also what `mkt` alone opens)")
@@ -90,6 +108,8 @@ program
     } finally {
       await detachAll();
     }
+    // exit now: leftover handles (Chrome connections, sockets) must not delay handing the terminal to the agent
+    process.exit(0);
   });
 
 program
@@ -148,6 +168,18 @@ brand
   .action((slug, o) => {
     const dir = createBrand(ctx(), slug, o.name, { website: o.website, languages: o.languages.split(","), timezone: o.timezone });
     out(`created ${dir}\nnext: run the brand-foundation skill in Claude Code / Codex ("/brand-foundation ${slug}") to fill it in.`);
+  });
+brand
+  .command("scan <url>")
+  .description("read a website: name, languages, socials, contacts, colours and fonts (saved under research/ with --brand)")
+  .option("--brand <brand>", "save the scan to workspace/brands/<brand>/research/")
+  .option("--json", "print the full result as JSON")
+  .action(async (url, o) => {
+    const x = ctx();
+    const prof = await scanSite(x, url);
+    if (o.json) out(JSON.stringify(prof, null, 2));
+    else out(describeProfile(prof));
+    if (o.brand) out(c.dim(`saved ${path.relative(x.root, saveProfile(x, o.brand, prof))}`));
   });
 brand.command("list").action(() => {
   const x = ctx();
@@ -422,6 +454,7 @@ program
   .option("--brand <brand>")
   .option("--engine <engine>", "claude | codex")
   .option("--browser-actions", "allow clicking/typing in the browser (default read-only browsing)")
+  .option("--name <name>", "run name for the log file in workspace/runs/")
   .option("--print-command", "show the command instead of running it")
   .action(async (words, o) => {
     const x = ctx();
@@ -430,7 +463,7 @@ program
       const cmd = buildCommand(x, o.engine ?? x.config.engine, "<mcp.json>", "<last.txt>", { MKT_MCP_PROFILE: "headless" });
       return out([cmd.bin, ...cmd.args.map((a) => (/\s/.test(a) ? JSON.stringify(a) : a))].join(" "));
     }
-    const r = await runAgent(x, { prompt, brand: o.brand, engine: o.engine, browserActions: !!o.browserActions });
+    const r = await runAgent(x, { prompt, brand: o.brand, engine: o.engine, name: o.name, browserActions: !!o.browserActions });
     out(r.output);
     out(c.dim(`\n${r.ok ? "ok" : "FAILED"} (${r.engine}${r.costUsd != null ? `, $${r.costUsd.toFixed(3)}` : ""}) log: ${r.logFile}`));
     if (!r.ok) process.exitCode = 1;
@@ -473,9 +506,10 @@ daemon.command("uninstall").action(() => {
   out(`removed ${file}`);
 });
 
-// `mkt` alone opens the guided setup in a terminal, and prints help otherwise
+// `mkt open ...` takes the rest of the line literally (a message may contain "-rf" or "--x"), so it skips option parsing.
+// `mkt` alone opens the guided setup in a terminal, and prints help otherwise.
 const argv = process.argv.length <= 2 && process.stdin.isTTY && process.stdout.isTTY ? [...process.argv, "setup"] : process.argv;
-program.parseAsync(argv).catch((e) => {
+(argv[2] === "open" ? openAgent(argv.slice(3)) : program.parseAsync(argv)).catch((e) => {
   process.stderr.write(c.red(`error: ${e instanceof MktError ? e.message : e?.stack ?? e}`) + "\n");
   process.exit(1);
 });

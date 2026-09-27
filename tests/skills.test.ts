@@ -8,7 +8,7 @@ import { ROOT } from "./helpers.js";
 
 const server = fs.readFileSync(path.join(ROOT, "src/mcp/server.ts"), "utf8");
 const TOOLS = new Set([...server.matchAll(/tool\(\s*"([a-z_]+)"/g)].map((m) => m[1]));
-const TOOL_LIKE = /\b((?:brand|account|content|lead|outbox|inbox|conversation|insight|trend|suppression|policy|browser)_[a-z_]+|suppress)\b/g;
+const TOOL_LIKE = /\b((?:brand|account|content|lead|outbox|inbox|conversation|insight|trend|suppression|policy|browser|site)_[a-z_]+|suppress)\b/g;
 const BUILTIN = new Set(["Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch", "Bash", "Skill", "Task", "Agent", "NotebookEdit", "TodoWrite"]);
 
 function frontmatter(file: string): { meta: any; body: string } {

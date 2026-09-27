@@ -95,7 +95,8 @@ export async function ensureChrome(ctx: Ctx, account: string, opts: { headless?:
   const dir = profileDir(ctx, account);
   fs.mkdirSync(dir, { recursive: true });
   const port = await allocatePort(ctx, account);
-  const headless = opts.headless ?? ctx.config.browser.headless;
+  // unattended runs (routines, background research) never pop up windows
+  const headless = opts.headless ?? (process.env.MKT_HEADLESS_BROWSER === "1" || ctx.config.browser.headless);
   const args = [
     `--user-data-dir=${dir}`,
     `--remote-debugging-port=${port}`,

@@ -15,7 +15,7 @@
     "mcp": "node --import tsx src/cli.ts mcp",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:browser": "MKT_BROWSER_TESTS=1 vitest run tests/browser.test.ts",
+    "test:browser": "MKT_BROWSER_TESTS=1 vitest run browser",
     "readme:assets": "node --import tsx scripts/readme-assets.ts"
   },
   "dependencies": {

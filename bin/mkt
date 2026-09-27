@@ -18,4 +18,26 @@ if [ ! -f "$ROOT/node_modules/tsx/dist/loader.mjs" ]; then
   echo "Installing dependencies (first run)..." >&2
   (cd "$ROOT" && npm install --silent --no-fund --no-audit >&2)
 fi
-exec node --import "$ROOT/node_modules/tsx/dist/loader.mjs" "$ROOT/src/cli.ts" "$@"
+LOADER="$ROOT/node_modules/tsx/dist/loader.mjs"
+
+# Everything except the guided setup and `open` replaces this shell (the MCP server must be the process its client
+# talks to).
+if [ $# -gt 0 ] && [ "$1" != "setup" ] && [ "$1" != "open" ]; then
+  exec node --import "$LOADER" "$ROOT/src/cli.ts" "$@"
+fi
+
+# Guided setup / open: when they end by opening Claude Code or Codex, they write the command to MKT_HANDOFF and exit;
+# this shell then becomes that agent, so the agent gets a clean terminal (no Node parent holding the TTY).
+HANDOFF="${TMPDIR:-/tmp}/mkt-handoff-$$"
+rm -f "$HANDOFF"
+status=0
+MKT_HANDOFF="$HANDOFF" node --import "$LOADER" "$ROOT/src/cli.ts" "$@" || status=$?
+if [ -s "$HANDOFF" ]; then
+  ARGS=()
+  while IFS= read -r -d '' arg; do ARGS+=("$arg"); done < "$HANDOFF"
+  rm -f "$HANDOFF"
+  cd "$ROOT"
+  exec "${ARGS[@]}"
+fi
+rm -f "$HANDOFF"
+exit "$status"

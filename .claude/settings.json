@@ -8,6 +8,7 @@
       "mcp__mkt__brand_get",
       "mcp__mkt__brand_context",
       "mcp__mkt__account_list",
+      "mcp__mkt__site_scan",
       "mcp__mkt__content_create",
       "mcp__mkt__content_get",
       "mcp__mkt__content_list",
@@ -70,11 +71,8 @@
       "Bash(*cli.ts review*)",
       "Bash(*mkt leads set-stage*)",
       "Edit(workspace/suppression.json)",
-      "Write(workspace/suppression.json)",
       "Edit(workspace/audit.jsonl)",
-      "Write(workspace/audit.jsonl)",
       "Edit(workspace/brands/*/outbox.json)",
-      "Write(workspace/brands/*/outbox.json)",
       "Read(.env)",
       "Read(workspace/.profiles/**)"
     ]

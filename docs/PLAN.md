@@ -90,6 +90,7 @@ mkt-harness/
 | Leads | `lead_upsert`, `lead_get`, `lead_list`, `lead_update` |
 | Outbox | `outbox_draft`, `outbox_list`, `outbox_get`, `outbox_update`, `outbox_cancel`, `outbox_approve` (off unless config allows), `outbox_dispatch`, `outbox_claim`, `outbox_complete` |
 | Inbox | `inbox_sync`, `conversation_list`, `conversation_get`, `conversation_log` |
+| Research | `site_scan` (public sites only: identity, socials, contacts, colours, fonts, page text) |
 | Insights | `insight_add`, `insight_list` |
 | Trends | `trend_observe`, `trend_momentum`, `trend_fetch_feed` |
 | Safety | `suppress`, `suppression_check`, `policy_status` |

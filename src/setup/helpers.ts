@@ -75,7 +75,18 @@ export function envName(kind: string, accountId: string): string {
   return `MKT_${kind}_${accountId}`.toUpperCase().replace(/[^A-Z0-9]+/g, "_");
 }
 
-const quote = (v: string) => (/^[A-Za-z0-9_./:@%+=,-]*$/.test(v) ? v : JSON.stringify(v));
+/**
+ * Quote for Node's .env parser (process.loadEnvFile): single quotes and backticks are literal; double quotes turn "\\n"
+ * into a newline and don't unescape \\". Values that no quoting keeps intact are refused rather than corrupted.
+ */
+export function quoteEnv(v: string): string {
+  if (/[\r\n\0]/.test(v)) throw new MktError("a .env value can't contain line breaks");
+  if (/^[A-Za-z0-9_./:@%+=,-]*$/.test(v)) return v;
+  if (!v.includes("'")) return `'${v}'`;
+  if (!v.includes("`")) return `\`${v}\``;
+  if (!v.includes('"') && !v.includes("\\")) return `"${v}"`;
+  throw new MktError("this value mixes quote characters in a way .env can't store; use a different secret");
+}
 
 /** Set keys in a dotenv file, keeping every other line (comments included). The file is private to the user. */
 export function upsertEnv(file: string, entries: Record<string, string>): void {
@@ -87,11 +98,11 @@ export function upsertEnv(file: string, entries: Record<string, string>): void {
     if (m && left.has(m[1])) {
       const v = left.get(m[1])!;
       left.delete(m[1]);
-      return `${m[1]}=${quote(v)}`;
+      return `${m[1]}=${quoteEnv(v)}`;
     }
     return line;
   });
-  for (const [k, v] of left) out.push(`${k}=${quote(v)}`);
+  for (const [k, v] of left) out.push(`${k}=${quoteEnv(v)}`);
   writeFileAtomic(file, out.join("\n") + "\n");
   fs.chmodSync(file, 0o600);
   for (const [k, v] of Object.entries(entries)) process.env[k] = v;

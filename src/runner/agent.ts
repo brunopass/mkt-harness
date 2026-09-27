@@ -82,6 +82,7 @@ export async function runAgent(ctx: Ctx, opts: RunOptions): Promise<RunResult> {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "mkt-run-"));
   const mcpEnv: Record<string, string> = {
     MKT_MCP_PROFILE: "headless",
+    MKT_HEADLESS_BROWSER: "1",
     MKT_WORKSPACE: ctx.ws,
     ...(opts.browserActions ? { MKT_ALLOW_BROWSER_ACTIONS: "1" } : {}),
   };
