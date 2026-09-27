@@ -60,3 +60,6 @@ leads. Global rules: [AGENTS.md](../../AGENTS.md).
 - All tofu (vanity reach, no leads) or all bofu (ad fatigue, unfollows).
 - Ignoring what already worked: reuse winning formats before inventing new ones.
 - Treating brand accounts on different platforms as mirrors — see `repurpose`.
+
+## Show it
+When done, show the calendar and the pillar × persona × funnel plan: an Artifact in Claude Code, else `report_open {path}`. See AGENTS.md › Show the result.

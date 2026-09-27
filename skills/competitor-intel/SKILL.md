@@ -54,3 +54,6 @@ account while researching.
 - Copying competitor hooks word-for-word: extract the structure, rewrite in our voice with our proof.
 - Assuming high follower count = what works now. Look at recent posts and long-running ads.
 - Logging into or interacting from the brand account (visible to them, and can look like spam).
+
+## Show it
+When done, show `competitors.md` as a comparison page (positioning, pricing, channels, gaps): an Artifact in Claude Code, else `report_open {path}`. See AGENTS.md › Show the result.

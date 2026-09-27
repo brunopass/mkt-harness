@@ -10,3 +10,5 @@
   per-account mkt profiles. If you ever send through Claude in Chrome, it must be an `outbox_claim`ed item, closed with
   `outbox_complete`; log messages you read there with `conversation_log`.
 - `.claude/settings.json` denies approving from the shell. Don't work around it.
+- Deliverables: publish them with the Artifact tool when it's available (see AGENTS.md › Show the result); `report_open`
+  is the local fallback and the only option for pages with contacts' personal data.

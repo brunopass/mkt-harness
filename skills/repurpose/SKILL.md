@@ -49,3 +49,6 @@ same text everywhere. Global rules: [AGENTS.md](../../AGENTS.md). Specs: `skills
 - Posting the same caption on 5 platforms on the same day (looks automated, cannibalises reach).
 - Cutting clips that need the previous minute of context: pick self-contained atoms.
 - Losing the CTA: every variant still feeds a lead path.
+
+## Show it
+When done, show the asset matrix (source piece → every derived piece): an Artifact in Claude Code, else `report_open {path}`. See AGENTS.md › Show the result.

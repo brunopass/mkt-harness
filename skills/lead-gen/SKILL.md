@@ -71,3 +71,6 @@ business signal, anyone in `suppression_check`, anyone already `do_not_contact`.
 - Counting "liked a post" as a buying signal. Comments with substance and triggers matter.
 - Treating public contact info as consent for WhatsApp. It isn't.
 - Leaving browser sessions running on LinkedIn for hours (restriction risk).
+
+## Show it
+When done, show the batch summary: counts by source, ICP score distribution, top segments. Names, handles and contact details stay local: use `report_open` for a page that lists people, never an Artifact: an Artifact in Claude Code, else `report_open {path}`. See AGENTS.md › Show the result.

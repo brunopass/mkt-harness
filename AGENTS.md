@@ -50,6 +50,22 @@ and guardrails. It works the same in Claude Code and Codex. Plan: `docs/PLAN.md`
     invent facts to fill a gap; leave it out.
   - The hard rules above do not relax: suppression, consent, quiet hours, limits and real identities still apply.
 
+## Show the result
+
+A deliverable isn't done until the human can see it. After you create or update a report, plan, calendar, radar,
+research summary, competitor teardown, script batch or anything else meant to be read:
+
+1. Keep the Markdown file in `workspace/` as the source: other skills read it.
+2. Show it:
+   - **Claude Code with the Artifact tool**: publish a page built from the file (Artifacts are private until the human
+     shares them) and give the link. Follow the Artifact tool's own design rules. When the report changes, update the
+     same Artifact instead of creating another one. Keep contacts' personal data out of Artifacts: no names, handles,
+     emails, phone numbers or message text of leads and customers; use counts, segments and anonymised quotes.
+   - **Codex, no Artifact tool, or a page that needs personal data**: `report_open {path}` renders the file as a local
+     page next to it and opens it in the browser (also `mkt report <file>`).
+   - **Unattended runs**: don't open or publish anything; list the files in your final summary.
+3. End your message with where to look (link or page) and the two or three things that matter most.
+
 ## Where things live
 
 ```

@@ -71,3 +71,6 @@ judge brand fit and timing. Global rules: [AGENTS.md](../../AGENTS.md).
 - Jumping on tragedies, politics or other brands' crises. Skip unless the brand is genuinely part of the story.
 - Renaming topics between runs (`"ai agents"` vs `"ai agent"`) — kills the time series.
 - Treating Google Trends daily RSS as niche signal: it's mass-market; use it for timing/cultural moments.
+
+## Show it
+When done, show `trends/radar.md` (ride / watch / skip with the numbers): an Artifact in Claude Code, else `report_open {path}`. See AGENTS.md › Show the result.

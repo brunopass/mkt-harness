@@ -5,7 +5,7 @@
 <p align="center">
   <a href="#quick-start"><img alt="Node 22.12+" src="https://img.shields.io/badge/node-22.12%2B-16161A?logo=nodedotjs&logoColor=white"></a>
   <a href="src/"><img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-16161A?logo=typescript&logoColor=white"></a>
-  <a href="src/mcp/server.ts"><img alt="49 MCP tools" src="https://img.shields.io/badge/MCP-49%20tools-E6007E"></a>
+  <a href="src/mcp/server.ts"><img alt="50 MCP tools" src="https://img.shields.io/badge/MCP-50%20tools-E6007E"></a>
   <a href="#skills"><img alt="17 skills" src="https://img.shields.io/badge/skills-17-E6007E"></a>
   <a href="#quick-start"><img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-ready-16161A?logo=claude&logoColor=white"></a>
   <a href="#quick-start"><img alt="Codex" src="https://img.shields.io/badge/Codex-ready-16161A"></a>
@@ -101,6 +101,14 @@ Every output, from a single reply to a month-long campaign, goes through the sam
 | **Execute** | Write, render, schedule, send, reply, then measure and feed the results back | `script-writer` `repurpose` `publish` `inbox` `analytics-review` | posts, DMs, emails, updated scores and personas |
 
 > **Today** the final ask (approving the exact words) is enforced by code; the earlier discuss and ask happen in the conversation. Persistent job files with an `mkt ask` queue, so that scheduled runs can also stop and ask, are next on the [roadmap](#roadmap).
+
+## Seeing the results
+
+A deliverable isn't finished until you can look at it. When an agent writes a report, plan, calendar, trend radar, research summary or a batch of scripts, it keeps the Markdown in `workspace/` (the source other skills read) and shows it to you:
+
+- **Claude Code** publishes it as an **Artifact**: a private page with a link, updated in place when the report changes. Contacts' personal data (names, handles, emails, phones, message text) never goes into an Artifact; those pages stay local.
+- **Codex**, or anything with personal data, gets a **local page**: `report_open` (or `mkt report <file>`) renders the Markdown next to it as a brand-styled page (tables, images, diagrams) and opens it in your browser. Raw HTML from web content is shown as text, and only safe links survive.
+- **Scheduled runs** don't open anything; they list the files in their summary.
 
 ## Sending, safely
 
@@ -287,7 +295,7 @@ mkt daemon install --load                    # macOS launchd: sends due items, s
 ```
 
 <details>
-<summary><b>Tools the agent can use</b> (49, MCP server <code>mkt</code>)</summary>
+<summary><b>Tools the agent can use</b> (50, MCP server <code>mkt</code>)</summary>
 
 | Area | Tools |
 |---|---|
@@ -297,6 +305,7 @@ mkt daemon install --load                    # macOS launchd: sends due items, s
 | Outbox | `outbox_draft` `outbox_list` `outbox_get` `outbox_update` `outbox_cancel` `outbox_approve` (off by default) `outbox_dispatch` `outbox_claim` `outbox_complete` |
 | Inbox | `inbox_sync` `conversation_list` `conversation_get` `conversation_log` |
 | Research | `site_scan` (any public site, yours or a competitor's: identity, socials, contacts, colours, fonts, page text) |
+| Show results | `report_open` (a Markdown deliverable as a styled local page, opened in the browser) |
 | Insights & trends | `insight_add` `insight_list` `trend_observe` `trend_momentum` `trend_fetch_feed` |
 | Safety | `suppress` `suppression_check` `policy_status` |
 | Browser | `browser_open` `browser_navigate` `browser_snapshot` `browser_text` `browser_screenshot` `browser_scroll` `browser_tabs` `browser_close` `browser_login_status` `browser_click` `browser_type` `browser_press` `browser_upload` |
@@ -324,6 +333,7 @@ mkt inbox sync [account] | list <brand> [--needs-reply]
 mkt trends fetch <brand> <feed|google-trends:BR> | momentum <brand> [--days]
 mkt suppress <email|+phone|platform:handle...> --reason <text>
 mkt autopilot on|off|status [--kinds post,reply,...] [--approve-pending]
+mkt report <file.md> [--no-open]      show a report/plan from the workspace as a page in the browser
 mkt audit [--tail n]
 mkt agent "<task>" [--brand --engine claude|codex --browser-actions --print-command]
 mkt routine list | run <name>
@@ -341,7 +351,8 @@ skills/              17 shared skills + references (hooks, formats, outreach tem
 .claude/agents/      7 subagents          .claude/settings.json   permissions (agents can't approve)
 src/
   core/              schemas, store (lock + atomic writes), policy, outbox, leads, content, conversations, trends, cron
-  mcp/server.ts      the 49 tools
+  mcp/server.ts      the 50 tools
+  report/            Markdown deliverables -> safe, brand-styled local pages
   research/          site scanner (headless Chrome) used by setup, site_scan and mkt brand scan
   browser/           Chrome per account over CDP, snapshot refs, 9 platform adapters
   channels/          dispatcher, SMTP, WhatsApp Cloud API
@@ -387,6 +398,7 @@ What the tests cover, including the adversarial cases:
 | Agent hand-off | `mkt open` through the real shell script | arguments with `$( )`, backticks, `;`, `*`, `-rf`: passed literally, nothing executed, no Node parent left behind |
 | Browser | snapshot refs, dry run vs real send against a fake social site, adapter failure screenshots, renderer | |
 | Autopilot | drafts approved as autopilot, kinds respected, re-approval after edits, switching on and off (pending items, config, local Claude permissions) | held items can't be released by an agent (or sent if forged), suppression after approval, opt-out replies cancel what autopilot queued, consent, quiet hours, touch and rate limits, replies to people who never wrote |
+| Reports | Markdown to a brand-styled page next to the file, frontmatter stripped, tables, images, diagrams drawn (real Chrome) | `<script>`, `onerror`, `<iframe>`, `javascript:` (any case, with tabs), `data:`, `vbscript:`, `file:` and protocol-relative links, diagram labels with HTML, symlinks and paths out of the workspace; the page is opened in Chrome and nothing runs |
 | Skills | frontmatter, only real tool names, links resolve | no subagent can approve or run shell commands |
 
 ## Roadmap

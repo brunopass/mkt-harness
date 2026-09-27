@@ -69,3 +69,6 @@ a sample carousel (`content_render`) for the human to compare.
 - Rebranding because the team is bored. Customers barely noticed the old one.
 - Chasing one viral post's angle into the positioning.
 - Changing voice per trend. Voice evolves slowly; formats can change fast.
+
+## Show it
+When done, show the proposed (or, on autopilot, applied) changes as before/after: an Artifact in Claude Code, else `report_open {path}`. See AGENTS.md › Show the result.

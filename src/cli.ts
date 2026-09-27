@@ -27,6 +27,7 @@ import { initWorkspace, switchMode } from "./setup/helpers.js";
 import { Cancelled, clackPrompter } from "./setup/prompter.js";
 import { homePrompt, runSetup } from "./setup/tui.js";
 import { renderContent } from "./render/carousel.js";
+import { openInBrowser, writeReport } from "./report/render.js";
 import { buildCommand, runAgent } from "./runner/agent.js";
 
 const envFile = path.join(ROOT, ".env");
@@ -436,6 +437,17 @@ trends.command("momentum <brand>").option("--days <n>", "", "30").action((b, o) 
 });
 
 // ---------------------------------------------------------------- safety
+
+program
+  .command("report <file>")
+  .description("show a Markdown report/plan from the workspace as a styled page in the browser")
+  .option("--no-open", "only write the .html next to it")
+  .action((file: string, o) => {
+    const x = ctx();
+    const r = writeReport(x, file);
+    const opened = o.open !== false && openInBrowser(r.html);
+    out(`${path.relative(x.root, r.html)}${opened ? " (opened)" : ""}`);
+  });
 
 program
   .command("suppress <identifiers...>")

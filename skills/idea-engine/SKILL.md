@@ -77,3 +77,6 @@ Score (0-100) = Σ weight × (s − 1) / 4 (weights sum to 100). If `reports/sco
 - 10 variations of one idea. Spread methods and personas.
 - Scoring everything 4-5. Force-rank; a 60 is a fine idea, 80+ should be rare.
 - Ideas needing proof we don't have: keep them but mark `NEEDS PROOF` and score `proof` 1.
+
+## Show it
+When done, show the scored ideas (a ranked table with the scores that drove them): an Artifact in Claude Code, else `report_open {path}`. See AGENTS.md › Show the result.

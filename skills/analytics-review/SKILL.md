@@ -70,3 +70,6 @@ save rate = saves/reach · share rate = shares/reach · hold rate = plays_3s/vie
 - Comparing reach across platforms or across accounts of very different size.
 - Declaring a winner from one post. Look for patterns across ≥ 3 items.
 - Vanity focus: a post with half the reach and 5 qualified DMs beats a viral post with none.
+
+## Show it
+When done, show the weekly report (what worked, what didn't, the three actions): an Artifact in Claude Code, else `report_open {path}`. See AGENTS.md › Show the result.

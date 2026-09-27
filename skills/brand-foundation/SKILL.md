@@ -74,3 +74,6 @@ Reads/writes `workspace/brands/<brand>/brand.yaml`, `brand.md`, `voice.md`, `off
 - Positioning against a competitor the customer never considers. Alternatives come from customers, not founders.
 - Filling pillars with topics ("AI", "productivity") instead of angles tied to a persona pain.
 - Overwriting human edits. Diff first; keep their words unless clearly placeholder.
+
+## Show it
+When done, show the foundation (positioning, messaging, voice, offers, open questions): an Artifact in Claude Code, else `report_open {path}`. See AGENTS.md › Show the result.

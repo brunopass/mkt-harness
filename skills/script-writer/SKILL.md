@@ -98,3 +98,6 @@ not repeats) → one story or insight → one lesson → one CTA. Plain-text-loo
 - Scripts that read well but can't be filmed: every visual line must be shootable with the stated capacity.
 - Carousel slides with paragraphs; if it doesn't fit at 38px, split the slide.
 - Ending with three CTAs. Pick one.
+
+## Show it
+When done, show the batch: scripts, captions and rendered slides together on one page: an Artifact in Claude Code, else `report_open {path}`. See AGENTS.md › Show the result.

@@ -23,6 +23,7 @@ import { audit, MktError, truncate } from "../core/store.js";
 import { fetchFeedAndObserve, momentum, observe } from "../core/trends.js";
 import { syncAccount, syncAll } from "../inbox/sync.js";
 import { renderContent } from "../render/carousel.js";
+import { openInBrowser, writeReport } from "../report/render.js";
 import { saveProfile, scanSite } from "../research/site.js";
 
 type Content = { type: "text"; text: string } | { type: "image"; data: string; mimeType: string };
@@ -88,6 +89,19 @@ export function createServer(ctx: Ctx): McpServer {
       const prof = await scanSite(ctx, url);
       const saved = brand ? path.relative(ctx.root, saveProfile(ctx, brand, prof)) : undefined;
       return { ...prof, pages: prof.pages.map((pg) => ({ url: pg.url, title: pg.title, text: truncate(pg.text, 1500) })), saved };
+    },
+  );
+
+  // ------------------------------------------------------------ show results
+
+  tool(
+    "report_open",
+    "Show a Markdown deliverable from the workspace (report, plan, calendar, radar, research, scripts) as a styled page next to it, opened in the human's browser. Use it when you can't publish an Artifact (Codex, headless), or when the page contains contacts' personal data.",
+    { path: z.string().describe("Markdown file inside workspace/, e.g. workspace/brands/acme/reports/week-2026-09-28.md"), open: z.boolean().optional().describe("default true") },
+    ({ path: file, open }) => {
+      const r = writeReport(ctx, file);
+      const opened = open === false ? false : openInBrowser(r.html);
+      return { title: r.title, html: path.relative(ctx.root, r.html), url: r.url, opened };
     },
   );
 

@@ -65,3 +65,6 @@ Pick with: pain weight (insights) × link to offer × production effort. One mag
 - "Ultimate guide" PDFs nobody reads. Short beats comprehensive.
 - Pitching in the delivery message. Deliver, ask one question, listen.
 - Treating a comment as consent for ongoing marketing. It isn't.
+
+## Show it
+When done, show the magnet outline, funnel and landing copy: an Artifact in Claude Code, else `report_open {path}`. See AGENTS.md › Show the result.
